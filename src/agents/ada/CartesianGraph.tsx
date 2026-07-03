@@ -6,6 +6,7 @@ import styles from './CartesianGraph.module.css';
 const FALLBACK_HEIGHT = 300;
 const MAX_WIDTH = 640;
 const MAX_HEIGHT = 480;
+const MIN_HEIGHT = 200;
 
 // 16-color light-mode palette — Tailwind 600 level, chosen for contrast on white
 const PALETTE = [
@@ -37,6 +38,7 @@ const CartesianGraph: Component<{
 }> = (props) => {
   let el!: HTMLDivElement;
   let currentWidth = 0;
+  let clickCleanup: (() => void) | null = null;
   const [pendingClicks, setPendingClicks] = createSignal<Array<{ x: number; y: number }>>([]);
 
   const draw = (w: number) => {
@@ -44,9 +46,12 @@ const CartesianGraph: Component<{
     w = Math.min(w, MAX_WIDTH);
     currentWidth = w;
     const h = Math.min(
-      props.spec.xDomain && props.spec.yDomain
-        ? w * (props.spec.yDomain[1] - props.spec.yDomain[0]) / (props.spec.xDomain[1] - props.spec.xDomain[0])
-        : FALLBACK_HEIGHT,
+      Math.max(
+        props.spec.xDomain && props.spec.yDomain
+          ? w * (props.spec.yDomain[1] - props.spec.yDomain[0]) / (props.spec.xDomain[1] - props.spec.xDomain[0])
+          : FALLBACK_HEIGHT,
+        MIN_HEIGHT,
+      ),
       MAX_HEIGHT,
     );
 
@@ -84,12 +89,15 @@ const CartesianGraph: Component<{
       ],
     });
 
+    clickCleanup?.();
+    clickCleanup = null;
+
     if (props.spec.interactive && props.onGraphClick) {
       const svgEl = el.querySelector('svg') as SVGSVGElement | null;
       const plotG = svgEl?.querySelector('g') as SVGGElement | null;
       if (svgEl && plotG) {
         svgEl.style.cursor = 'crosshair';
-        svgEl.addEventListener('click', (e: MouseEvent) => {
+        const handler = (e: MouseEvent) => {
           const ctm = plotG.getScreenCTM();
           if (!ctm) return;
           const pt = svgEl.createSVGPoint();
@@ -98,8 +106,12 @@ const CartesianGraph: Component<{
           const local = pt.matrixTransform(ctm.inverse());
           const x = round2(instance.meta.xScale!.invert(local.x));
           const y = round2(instance.meta.yScale!.invert(local.y));
-          setPendingClicks((prev) => [...prev, { x, y }]);
-        });
+          setPendingClicks((prev) =>
+            prev.some((p) => p.x === x && p.y === y) ? prev : [...prev, { x, y }],
+          );
+        };
+        svgEl.addEventListener('click', handler);
+        clickCleanup = () => svgEl.removeEventListener('click', handler);
       }
     }
   };
