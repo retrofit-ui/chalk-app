@@ -110,6 +110,7 @@ const App: Component = () => {
     upsertConversation(forked);
     activateConv(forked);
     refreshList();
+    setTimeout(() => textareaRef?.focus(), 0);
   };
 
   const revertTo = (messageIndex: number) => {
@@ -209,6 +210,7 @@ const App: Component = () => {
     if (!text) return;
     setInput('');
     void sendMessage({ role: 'user', content: text });
+    setTimeout(() => textareaRef?.focus(), 0);
   };
 
   const onGraphClick = (points: Array<{ x: number; y: number }>) => {
@@ -275,7 +277,6 @@ const App: Component = () => {
                   {(a) => <option value={a.id}>{a.name}</option>}
                 </For>
               </select>
-              <span class={styles.systemBadge}>{agent().version}</span>
               <select
                 class={styles.modelSelect}
                 value={activeConv.model}
