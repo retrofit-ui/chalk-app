@@ -1,0 +1,21 @@
+.actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.btn {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #888;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.btn:hover {
+  border-color: #aaa;
+  color: #333;
+  background: #f5f5f5;
+}

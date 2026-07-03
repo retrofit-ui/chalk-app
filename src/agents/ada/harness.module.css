@@ -1,0 +1,11 @@
+.userContent {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 14px;
+  background: #eef2ff;
+  border: 1px solid #d8e2f9;
+  color: #1a1a2e;
+  padding: 10px 14px;
+  border-radius: 12px;
+  align-self: flex-start;
+}
