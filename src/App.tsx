@@ -24,14 +24,12 @@ import {
   upsertConversation,
   type Conversation,
 } from './conversations';
-import ada from './agents/ada/index';
+import { AGENTS, getAgent } from './agents/index';
 import LessonPlan from './components/LessonPlan';
 import MessageActions from './components/MessageActions';
 import ReplyBox from './components/ReplyBox';
 import Sidebar from './Sidebar';
 import styles from './App.module.css';
-
-const AGENT = ada;
 
 function resolveInitialConv(): Conversation {
   const savedId = getActiveId();
@@ -83,12 +81,14 @@ const App: Component = () => {
     setPlanOpen(false);
   };
 
-  const startNew = () => activateConv(newConversation(activeConv.model));
+  const agent = () => getAgent(activeConv.agentId);
+
+  const startNew = () => activateConv(newConversation(activeConv.model, activeConv.agentId));
 
   const selectConv = (conv: Conversation) => activateConv(conv);
 
   const selectExample = (example: Conversation) => {
-    const conv = newConversation(activeConv.model);
+    const conv = newConversation(activeConv.model, activeConv.agentId);
     conv.title = example.title;
     activateConv(conv);
     setInput(example.messages[0]?.content ?? '');
@@ -97,6 +97,11 @@ const App: Component = () => {
 
   const setModel = (model: string) => {
     setActiveConv('model', model);
+    upsertConversation({ ...activeConv });
+  };
+
+  const setAgentId = (id: string) => {
+    setActiveConv('agentId', id);
     upsertConversation({ ...activeConv });
   };
 
@@ -162,7 +167,7 @@ const App: Component = () => {
       const stream = client.messages.stream({
         model,
         max_tokens: 4096,
-        system: AGENT.systemPrompt,
+        system: agent().systemPrompt,
         messages: activeConv.messages
           .slice(0, assistantIdx)
           .map((m) => ({ role: m.role, content: m.content })),
@@ -260,7 +265,17 @@ const App: Component = () => {
               {activeConv.plans.length > 0 ? 'ⓘ' : '○'}
             </button>
             <div class={styles.headerMeta}>
-              <span class={styles.systemBadge}>{AGENT.name} {AGENT.version}</span>
+              <select
+                class={styles.agentSelect}
+                value={activeConv.agentId}
+                onChange={(e) => setAgentId(e.currentTarget.value)}
+                disabled={busy()}
+              >
+                <For each={AGENTS}>
+                  {(a) => <option value={a.id}>{a.name}</option>}
+                </For>
+              </select>
+              <span class={styles.systemBadge}>{agent().version}</span>
               <select
                 class={styles.modelSelect}
                 value={activeConv.model}
@@ -283,14 +298,14 @@ const App: Component = () => {
 
           <main ref={messagesRef} class={styles.messages}>
             <Show when={activeConv.messages.length === 0 && !input()}>
-              <div class={styles.empty}>Say something to {AGENT.name}.</div>
+              <div class={styles.empty}>Say something to {agent().name}.</div>
             </Show>
             <For each={activeConv.messages} keyed>
               {(m, index) => (
                 <Show when={m.content || m.modifiedFromRawMessage}>
                   <div class={`${styles.msg} msg`}>
                     <div class={styles.role}>
-                      {m.role === 'assistant' ? AGENT.name.toLowerCase() : 'you'}
+                      {m.role === 'assistant' ? agent().name.toLowerCase() : 'you'}
                       <Show when={m.model}>
                         <span class={styles.msgModel}> · {m.model}</span>
                       </Show>
@@ -298,10 +313,10 @@ const App: Component = () => {
                     <div class={styles.msgBody}>
                       <Show
                         when={m.role === 'assistant'}
-                        fallback={<AGENT.Harness message={m} onGraphClick={onGraphClick} onDrawSubmit={onDrawSubmit} />}
+                        fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
                       >
                         <ReplyBox>
-                          <AGENT.Harness message={m} onGraphClick={onGraphClick} onDrawSubmit={onDrawSubmit} />
+                          {agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
                         </ReplyBox>
                       </Show>
                       <div class={styles.msgActions}>
@@ -326,7 +341,7 @@ const App: Component = () => {
               <textarea
                 ref={textareaRef}
                 class={styles.textarea}
-                placeholder={`Message ${AGENT.name}…  (Enter to send, Shift+Enter for newline)`}
+                placeholder={`Message ${agent().name}…  (Enter to send, Shift+Enter for newline)`}
                 value={input()}
                 onInput={(e) => setInput(e.currentTarget.value)}
                 onKeyDown={onKeyDown}

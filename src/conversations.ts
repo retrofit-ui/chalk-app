@@ -8,6 +8,7 @@ export type Conversation = {
   updatedAt: number;
   messages: ChatMessage[];
   model: string;
+  agentId: string;
   plans: string[];
   provenance?: {
     parentId: string;
@@ -21,6 +22,7 @@ const ACTIVE_ID_KEY = 'chalk.activeConvId';
 function normalize(conv: Conversation): Conversation {
   return {
     model: DEFAULT_MODEL,
+    agentId: 'ada',
     plans: [],
     ...conv,
     messages: conv.messages.map((m) => ({
@@ -70,7 +72,7 @@ export function deleteConversation(id: string): void {
   saveAll(all);
 }
 
-export function newConversation(model?: string): Conversation {
+export function newConversation(model?: string, agentId?: string): Conversation {
   return {
     id: crypto.randomUUID(),
     title: 'New conversation',
@@ -78,6 +80,7 @@ export function newConversation(model?: string): Conversation {
     updatedAt: Date.now(),
     messages: [],
     model: model ?? DEFAULT_MODEL,
+    agentId: agentId ?? 'ada',
     plans: [],
   };
 }
