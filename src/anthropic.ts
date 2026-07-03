@@ -36,10 +36,17 @@ export function makeClient(apiKey: string): Anthropic {
   return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 }
 
+export type TextBlock = { type: 'text'; text: string };
+export type ImageBlock = { type: 'image'; source: { type: 'base64'; media_type: 'image/png'; data: string } };
+export type MessageContent = string | Array<TextBlock | ImageBlock>;
+
 export type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
-  content: string;
+  content: MessageContent;
+  kind?: 'graph-click' | 'draw-submission';
+  graphClickData?: { points: Array<{ x: number; y: number }> };
+  drawSubmissionData?: { imageBase64: string };
   model?: string;
   modifiedFromRawMessage?: string;
 };

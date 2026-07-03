@@ -1,5 +1,6 @@
 .container {
   margin: 0.5rem 0;
+  max-width: 640px;
 }
 
 .title {
@@ -40,4 +41,53 @@
 /* Curve lines — slightly thicker than default */
 .plot :global(.function-plot path.line) {
   stroke-width: 2px;
+}
+
+.interactiveBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  min-height: 28px;
+}
+
+.interactiveHint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.clickCount {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-family: 'ui-monospace', 'Menlo', monospace;
+}
+
+.clearBtn {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.clearBtn:hover {
+  background: #f1f5f9;
+}
+
+.submitBtn {
+  font-size: 0.75rem;
+  padding: 2px 10px;
+  border: none;
+  border-radius: 4px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.submitBtn:hover {
+  background: #1d4ed8;
 }

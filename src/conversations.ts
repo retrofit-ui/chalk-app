@@ -142,8 +142,11 @@ export function extractPlanBlock(content: string): { plan: string | null; reply:
 export function deriveTitle(messages: ChatMessage[]): string {
   const first = messages.find((m) => m.role === 'user');
   if (!first) return 'New conversation';
-  const text = first.content.slice(0, 60).trim();
-  return first.content.length > 60 ? text + '…' : text;
+  const raw = typeof first.content === 'string'
+    ? first.content
+    : (first.content.find((b) => b.type === 'text') as { type: 'text'; text: string } | undefined)?.text ?? 'Drawing';
+  const text = raw.slice(0, 60).trim();
+  return raw.length > 60 ? text + '…' : text;
 }
 
 export function getActiveId(): string | null {

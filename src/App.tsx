@@ -131,20 +131,18 @@ const App: Component = () => {
     upsertConversation({ ...activeConv });
   };
 
-  const send = async () => {
+  const sendMessage = async (userMsg: Omit<ChatMessage, 'id'>) => {
     const key = apiKey();
-    const text = input().trim();
-    if (!key || !text || busy()) return;
+    if (!key || busy()) return;
 
     setError(null);
-    setInput('');
     setBusy(true);
 
     const userMsgId = crypto.randomUUID();
     const assistantMsgId = crypto.randomUUID();
 
     setActiveConv('messages', produce((m: ChatMessage[]) => {
-      m.push({ id: userMsgId, role: 'user', content: text });
+      m.push({ id: userMsgId, ...userMsg });
       m.push({ id: assistantMsgId, role: 'assistant', content: '' });
     }));
     const assistantIdx = activeConv.messages.length - 1;
@@ -199,6 +197,37 @@ const App: Component = () => {
     } finally {
       setBusy(false);
     }
+  };
+
+  const send = () => {
+    const text = input().trim();
+    if (!text) return;
+    setInput('');
+    void sendMessage({ role: 'user', content: text });
+  };
+
+  const onGraphClick = (points: Array<{ x: number; y: number }>) => {
+    const summary = points.length === 1
+      ? `I clicked the point (${points[0].x}, ${points[0].y}) on the graph.`
+      : `I clicked the following points on the graph:\n${points.map(p => `- (${p.x}, ${p.y})`).join('\n')}`;
+    void sendMessage({
+      role: 'user',
+      content: summary,
+      kind: 'graph-click',
+      graphClickData: { points },
+    });
+  };
+
+  const onDrawSubmit = (imageBase64: string) => {
+    void sendMessage({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Here is my drawing:' },
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imageBase64 } },
+      ],
+      kind: 'draw-submission',
+      drawSubmissionData: { imageBase64 },
+    });
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -269,10 +298,10 @@ const App: Component = () => {
                     <div class={styles.msgBody}>
                       <Show
                         when={m.role === 'assistant'}
-                        fallback={<AGENT.Harness message={m} />}
+                        fallback={<AGENT.Harness message={m} onGraphClick={onGraphClick} onDrawSubmit={onDrawSubmit} />}
                       >
                         <ReplyBox>
-                          <AGENT.Harness message={m} />
+                          <AGENT.Harness message={m} onGraphClick={onGraphClick} onDrawSubmit={onDrawSubmit} />
                         </ReplyBox>
                       </Show>
                       <div class={styles.msgActions}>

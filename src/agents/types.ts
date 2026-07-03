@@ -9,6 +9,8 @@ export type Skill = {
 
 export type HarnessProps = {
   message: ChatMessage;
+  onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
+  onDrawSubmit?: (imageBase64: string) => void;
 };
 
 export type Agent = {

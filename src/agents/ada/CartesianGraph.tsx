@@ -1,9 +1,11 @@
-import { type Component, createEffect, onCleanup, onMount } from 'solid-js';
+import { type Component, createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import functionPlot from 'function-plot';
 import type { ChalkGraphSpec } from './spec';
 import styles from './CartesianGraph.module.css';
 
 const FALLBACK_HEIGHT = 300;
+const MAX_WIDTH = 640;
+const MAX_HEIGHT = 480;
 
 // 16-color light-mode palette — Tailwind 600 level, chosen for contrast on white
 const PALETTE = [
@@ -27,19 +29,26 @@ const PALETTE = [
 
 const color = (index: number) => PALETTE[index % PALETTE.length];
 
-const CartesianGraph: Component<{ spec: ChalkGraphSpec }> = (props) => {
-  let el!: HTMLDivElement;
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  // Captured so createEffect (spec changes) can redraw at the current size
-  // without needing to re-measure — ResizeObserver owns measurement.
+const CartesianGraph: Component<{
+  spec: ChalkGraphSpec;
+  onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
+}> = (props) => {
+  let el!: HTMLDivElement;
   let currentWidth = 0;
+  const [pendingClicks, setPendingClicks] = createSignal<Array<{ x: number; y: number }>>([]);
 
   const draw = (w: number) => {
     if (!w) return;
+    w = Math.min(w, MAX_WIDTH);
     currentWidth = w;
-    const h = props.spec.xDomain && props.spec.yDomain
-      ? w * (props.spec.yDomain[1] - props.spec.yDomain[0]) / (props.spec.xDomain[1] - props.spec.xDomain[0])
-      : FALLBACK_HEIGHT;
+    const h = Math.min(
+      props.spec.xDomain && props.spec.yDomain
+        ? w * (props.spec.yDomain[1] - props.spec.yDomain[0]) / (props.spec.xDomain[1] - props.spec.xDomain[0])
+        : FALLBACK_HEIGHT,
+      MAX_HEIGHT,
+    );
 
     el.style.height = `${h}px`;
 
@@ -52,7 +61,12 @@ const CartesianGraph: Component<{ spec: ChalkGraphSpec }> = (props) => {
       ];
     });
 
-    functionPlot({
+    // Reading pendingClicks() here makes this draw() reactive to click accumulation
+    const clickMarkers = pendingClicks().flatMap(({ x, y }) => [
+      { fnType: 'points' as const, points: [[x, y]], graphType: 'scatter' as const, color: '#f59e0b' },
+    ]);
+
+    const instance = functionPlot({
       target: el,
       width: w,
       height: h,
@@ -66,8 +80,28 @@ const CartesianGraph: Component<{ spec: ChalkGraphSpec }> = (props) => {
           color: color(i),
         })),
         ...pointData,
+        ...clickMarkers,
       ],
     });
+
+    if (props.spec.interactive && props.onGraphClick) {
+      const svgEl = el.querySelector('svg') as SVGSVGElement | null;
+      const plotG = svgEl?.querySelector('g') as SVGGElement | null;
+      if (svgEl && plotG) {
+        svgEl.style.cursor = 'crosshair';
+        svgEl.addEventListener('click', (e: MouseEvent) => {
+          const ctm = plotG.getScreenCTM();
+          if (!ctm) return;
+          const pt = svgEl.createSVGPoint();
+          pt.x = e.clientX;
+          pt.y = e.clientY;
+          const local = pt.matrixTransform(ctm.inverse());
+          const x = round2(instance.meta.xScale!.invert(local.x));
+          const y = round2(instance.meta.yScale!.invert(local.y));
+          setPendingClicks((prev) => [...prev, { x, y }]);
+        });
+      }
+    }
   };
 
   onMount(() => {
@@ -79,15 +113,35 @@ const CartesianGraph: Component<{ spec: ChalkGraphSpec }> = (props) => {
     onCleanup(() => ro.disconnect());
   });
 
-  // Re-draw when the spec changes (e.g. streaming update), using last known width.
   createEffect(() => { draw(currentWidth || el.offsetWidth); });
 
   onCleanup(() => { el.replaceChildren(); });
+
+  const submit = () => {
+    const pts = pendingClicks();
+    if (!pts.length) return;
+    props.onGraphClick!(pts);
+    setPendingClicks([]);
+  };
 
   return (
     <div class={styles.container}>
       {props.spec.title && <div class={styles.title}>{props.spec.title}</div>}
       <div ref={el} class={styles.plot} />
+      <Show when={props.spec.interactive && props.onGraphClick}>
+        <div class={styles.interactiveBar}>
+          <Show
+            when={pendingClicks().length > 0}
+            fallback={<span class={styles.interactiveHint}>Click the graph to mark points</span>}
+          >
+            <span class={styles.clickCount}>
+              {pendingClicks().length} point{pendingClicks().length > 1 ? 's' : ''} marked
+            </span>
+            <button class={styles.clearBtn} onClick={() => setPendingClicks([])}>Clear</button>
+            <button class={styles.submitBtn} onClick={submit}>Submit</button>
+          </Show>
+        </div>
+      </Show>
     </div>
   );
 };

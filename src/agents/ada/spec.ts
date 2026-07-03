@@ -19,8 +19,17 @@ export type ChalkGraphSpec = {
   xDomain?: [number, number];
   yDomain?: [number, number];
   title?: string;
+  interactive?: boolean;
+};
+
+export type ChalkDrawSpec = {
+  kind: 'chalk-draw';
+  xDomain?: [number, number];
+  yDomain?: [number, number];
+  title?: string;
+  prompt?: string;
 };
 
 // Chunks in a Chalk message are either a top-level retrofit spec or a chalk-specific spec.
 // Using RootSpec (not ViewSpec) because chunks are rendered via SpecRenderer which accepts RootSpec.
-export type ChalkViewSpec = RootSpec | ChalkGraphSpec;
+export type ChalkViewSpec = RootSpec | ChalkGraphSpec | ChalkDrawSpec;

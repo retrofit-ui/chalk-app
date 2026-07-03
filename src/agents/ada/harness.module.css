@@ -9,3 +9,37 @@
   border-radius: 12px;
   align-self: flex-start;
 }
+
+.graphClickEvent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-family: 'ui-monospace', 'Menlo', monospace;
+  align-self: flex-start;
+}
+
+.graphClickIcon {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.drawSubmission {
+  display: inline-block;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.drawThumbnail {
+  display: block;
+  max-width: 320px;
+  max-height: 224px;
+  width: 100%;
+}
