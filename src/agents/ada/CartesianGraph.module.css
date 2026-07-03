@@ -1,0 +1,43 @@
+.container {
+  margin: 0.5rem 0;
+}
+
+.title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--sl-color-neutral-700);
+  margin-bottom: 0.25rem;
+}
+
+.plot {
+  width: 100%;
+}
+
+.plot :global(.function-plot) {
+  font-family: inherit;
+}
+
+/* Scatter point dots — override function-plot's hardcoded r=1 */
+.plot :global(circle.scatter) {
+  r: 6px;
+}
+
+/* Axis and grid styling */
+.plot :global(.function-plot .axis path),
+.plot :global(.function-plot .axis line) {
+  stroke: #e2e8f0;
+}
+
+.plot :global(.function-plot .axis text) {
+  fill: #64748b;
+  font-size: 0.7rem;
+}
+
+.plot :global(.function-plot .grid line) {
+  stroke: #f1f5f9;
+}
+
+/* Curve lines — slightly thicker than default */
+.plot :global(.function-plot path.line) {
+  stroke-width: 2px;
+}
