@@ -15,8 +15,8 @@ importers:
         specifier: ^0.2.0
         version: 0.2.0(zod@4.4.3)
       '@retrofit-ui/spa-solid-shoelace':
-        specifier: ^0.2.1
-        version: 0.2.1(solid-js@1.9.9)(zod@4.4.3)
+        specifier: ^0.3.0
+        version: 0.3.0(solid-js@1.9.9)(zod@4.4.3)
       '@solidjs/router':
         specifier: ^0.16.1
         version: 0.16.1(solid-js@1.9.9)
@@ -408,8 +408,8 @@ packages:
     peerDependencies:
       zod: ^4.0.0
 
-  '@retrofit-ui/spa-solid-shoelace@0.2.1':
-    resolution: {integrity: sha512-usxrsoGhE4jdMRcH5BDgI5/OnCiLw32vyzFf03VeSV+M5+AaQ05NrTP/dKC6zvmnuq5AMuDveQENPTERn19meQ==}
+  '@retrofit-ui/spa-solid-shoelace@0.3.0':
+    resolution: {integrity: sha512-r95FA5pD2NvBQJO6PewKx+EpZsnIxlL6M/+azqh0Mn5dGLH40Ebf1RixS9WiyvSW5meCWcKmZ/rHXZU0rN1rsA==}
     engines: {node: '>=20'}
     peerDependencies:
       solid-js: '>=1.9.0'
@@ -1590,7 +1590,7 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
-  '@retrofit-ui/spa-solid-shoelace@0.2.1(solid-js@1.9.9)(zod@4.4.3)':
+  '@retrofit-ui/spa-solid-shoelace@0.3.0(solid-js@1.9.9)(zod@4.4.3)':
     dependencies:
       '@retrofit-ui/core': 0.2.0(zod@4.4.3)
     optionalDependencies:
