@@ -60,6 +60,13 @@ const App: Component = () => {
     });
   });
 
+  // Re-focus the textarea whenever the busy state clears (textarea re-enables after streaming)
+  createEffect((wasBusy: boolean) => {
+    const isBusy = busy();
+    if (wasBusy && !isBusy) textareaRef?.focus();
+    return isBusy;
+  }, false);
+
   const refreshList = () => setConvList(getAllConversations());
   const childMap = () => getChildMap(convList());
 
@@ -210,7 +217,6 @@ const App: Component = () => {
     if (!text) return;
     setInput('');
     void sendMessage({ role: 'user', content: text });
-    setTimeout(() => textareaRef?.focus(), 0);
   };
 
   const onGraphClick = (points: Array<{ x: number; y: number }>) => {
