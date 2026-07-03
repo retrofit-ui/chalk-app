@@ -1,0 +1,9 @@
+pre-commit:
+  commands:
+    test:
+      run: pnpm test
+
+pre-push:
+  commands:
+    ci:
+      run: act -j ci
