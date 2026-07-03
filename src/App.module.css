@@ -210,10 +210,11 @@
 }
 
 .gateTitle {
-  font-family: 'Noto Sans Devanagari', sans-serif;
   margin: 0;
   font-size: 36px;
-  font-weight: 500;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  color: #1a3a2a;
 }
 
 .gateSub {

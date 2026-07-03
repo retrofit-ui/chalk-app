@@ -331,7 +331,7 @@ const KeyGate: Component<{ onSave: (key: string) => void }> = (props) => {
   const [value, setValue] = createSignal('');
   return (
     <div class={styles.gate}>
-      <h1 class={styles.gateTitle}>गणित</h1>
+      <h1 class={styles.gateTitle}>chalk</h1>
       <p class={styles.gateSub}>
         Bring your own Anthropic API key. Stored in localStorage, sent
         directly to <code>api.anthropic.com</code>. No backend.

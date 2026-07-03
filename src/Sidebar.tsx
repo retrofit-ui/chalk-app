@@ -25,7 +25,7 @@ const Sidebar: Component<Props> = (props) => {
   return (
     <nav class={styles.sidebar}>
       <div class={styles.top}>
-        <span class={styles.logo}>गणित</span>
+        <span class={styles.logo}>chalk</span>
         <button class={styles.newBtn} onClick={props.onNew}>
           + New chat
         </button>

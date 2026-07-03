@@ -15,8 +15,8 @@ export type Conversation = {
   };
 };
 
-const CONV_STORAGE = 'ganita.conversations';
-const ACTIVE_ID_KEY = 'ganita.activeConvId';
+const CONV_STORAGE = 'chalk.conversations';
+const ACTIVE_ID_KEY = 'chalk.activeConvId';
 
 function normalize(conv: Conversation): Conversation {
   return {

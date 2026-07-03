@@ -205,7 +205,7 @@ describe('migration', () => {
       messages: [],
       // no model, no plans
     };
-    store['ganita.conversations'] = JSON.stringify({ 'old-1': oldConv });
+    store['chalk.conversations'] = JSON.stringify({ 'old-1': oldConv });
 
     const convs = getAllConversations();
     expect(convs[0].model).toBe(DEFAULT_MODEL);
@@ -220,7 +220,7 @@ describe('migration', () => {
       updatedAt: 1000,
       messages: [{ role: 'user', content: 'hello' }],
     };
-    store['ganita.conversations'] = JSON.stringify({ 'old-2': oldConv });
+    store['chalk.conversations'] = JSON.stringify({ 'old-2': oldConv });
 
     const convs = getAllConversations();
     expect(convs[0].messages[0].id).toBeTruthy();

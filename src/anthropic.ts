@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-const KEY_STORAGE = 'ganita.anthropic_api_key';
+const KEY_STORAGE = 'chalk.api_key';
 const ENV_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-6';

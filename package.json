@@ -1,7 +1,7 @@
 {
-  "name": "ganita",
+  "name": "chalk",
   "version": "0.0.0",
-  "description": "retrofit-ui demo — a chat app with rich interfaces",
+  "description": "Chalk — an AI math teacher",
   "type": "module",
   "scripts": {
     "start": "vite",
@@ -26,6 +26,8 @@
     "@retrofit-ui/core": "^0.2.0",
     "@retrofit-ui/spa-solid-shoelace": "^0.2.1",
     "@solidjs/router": "^0.16.1",
+    "katex": "^0.17.0",
+    "marked-katex-extension": "^5.1.10",
     "solid-js": "^1.9.5"
   }
 }

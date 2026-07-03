@@ -1,6 +1,12 @@
 /* @refresh reload */
 import { render } from 'solid-js/web';
 import 'solid-devtools';
+import 'katex/dist/katex.min.css';
+
+import { configureMarked } from '@retrofit-ui/spa-solid-shoelace/components';
+import markedKatex from 'marked-katex-extension';
+
+configureMarked(markedKatex({ throwOnError: false, output: 'html' }));
 
 import './index.css';
 import App from './App';
