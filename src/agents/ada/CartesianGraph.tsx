@@ -4,9 +4,10 @@ import type { ChalkGraphSpec } from './spec';
 import styles from './CartesianGraph.module.css';
 
 const FALLBACK_HEIGHT = 300;
-const MAX_WIDTH = 640;
 const MAX_HEIGHT = 480;
 const MIN_HEIGHT = 200;
+
+const SIZE_MAX_WIDTH: Record<string, number> = { small: 320, medium: 640, large: 900 };
 
 // 16-color light-mode palette — Tailwind 600 level, chosen for contrast on white
 const PALETTE = [
@@ -43,7 +44,7 @@ const CartesianGraph: Component<{
 
   const draw = (w: number) => {
     if (!w) return;
-    w = Math.min(w, MAX_WIDTH);
+    w = Math.min(w, SIZE_MAX_WIDTH[props.spec.size ?? 'medium']);
     currentWidth = w;
     const h = Math.min(
       Math.max(
@@ -137,7 +138,7 @@ const CartesianGraph: Component<{
   };
 
   return (
-    <div class={styles.container}>
+    <div class={styles.container} style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
       {props.spec.title && <div class={styles.title}>{props.spec.title}</div>}
       <div ref={el} class={styles.plot} />
       <Show when={props.spec.interactive && props.onGraphClick}>

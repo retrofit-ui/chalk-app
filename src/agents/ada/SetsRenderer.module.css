@@ -1,0 +1,22 @@
+.container {
+  margin: 0.5rem 0;
+  max-width: 560px;
+}
+
+.title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--sl-color-neutral-700, #334155);
+  margin-bottom: 0.25rem;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  background: white;
+}
+
+.setShape {
+  cursor: default;
+}

@@ -5,6 +5,8 @@ import styles from './DrawCanvas.module.css';
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 420;
 
+const SIZE_MAX_WIDTH: Record<string, number> = { small: 320, medium: 640, large: 900 };
+
 const DrawCanvas: Component<{
   spec: ChalkDrawSpec;
   onSubmit: (imageBase64: string) => void;
@@ -145,7 +147,7 @@ const DrawCanvas: Component<{
   };
 
   return (
-    <div class={styles.container}>
+    <div class={styles.container} style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
       {props.spec.title && <div class={styles.title}>{props.spec.title}</div>}
       {props.spec.prompt && <div class={styles.prompt}>{props.spec.prompt}</div>}
       <canvas
