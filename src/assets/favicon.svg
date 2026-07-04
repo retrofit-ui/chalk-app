@@ -1,0 +1,20 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Blackboard background -->
+  <rect width="512" height="512" rx="96" fill="#2b3a35"/>
+
+  <!-- subtle inner border like a chalkboard frame -->
+  <rect x="18" y="18" width="476" height="476" rx="82" fill="none" stroke="#1c2723" stroke-width="10"/>
+
+  <!-- Chalk-white C -->
+  <text
+    x="50%"
+    y="53%"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="300"
+    font-weight="700"
+    fill="#f5f4ef"
+    opacity="0.94"
+  >C</text>
+</svg>
