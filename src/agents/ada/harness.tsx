@@ -5,6 +5,7 @@ import ChalkSpecRenderer from './ChalkSpecRenderer';
 import styles from './harness.module.css';
 
 const CHALK_SPEC_FENCE = /```chalk-spec\n([\s\S]*?)\n```/g;
+const CHALK_SPEC_OPENER = '```chalk-spec';
 
 function parseChunks(content: string): ChalkViewSpec[] {
   const chunks: ChalkViewSpec[] = [];
@@ -27,7 +28,20 @@ function parseChunks(content: string): ChalkViewSpec[] {
   }
 
   const tail = content.slice(lastIndex);
-  if (tail.trim()) {
+  const unclosedIdx = tail.indexOf(CHALK_SPEC_OPENER);
+  if (unclosedIdx !== -1) {
+    const preFence = tail.slice(0, unclosedIdx);
+    if (preFence.trim()) {
+      chunks.push({ kind: 'markdown', content: preFence });
+    }
+    const partialBody = tail.slice(unclosedIdx + CHALK_SPEC_OPENER.length).replace(/^\n/, '');
+    chunks.push({
+      kind: 'markdown',
+      content:
+        `> ⚠️ **Truncated \`chalk-spec\` block** — the response was cut off mid-generation. ` +
+        `The partial JSON body is shown below.\n\n\`\`\`json\n${partialBody}\n\`\`\``,
+    });
+  } else if (tail.trim()) {
     chunks.push({ kind: 'markdown', content: tail });
   }
 

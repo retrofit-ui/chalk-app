@@ -48,6 +48,17 @@ const App: Component = () => {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [planOpen, setPlanOpen] = createSignal(false);
+  const [rawIds, setRawIds] = createSignal<Set<string>>(new Set());
+  const toggleRaw = (index: number) => {
+    const id = activeConv.messages[index]?.id;
+    if (!id) return;
+    setRawIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   let textareaRef: HTMLTextAreaElement | undefined;
   let messagesRef: HTMLElement | undefined;
 
@@ -172,13 +183,30 @@ const App: Component = () => {
     try {
       const client = makeClient(key);
       const model = activeConv.model ?? DEFAULT_MODEL;
+      const priorMessages = activeConv.messages.slice(0, assistantIdx);
+      const lastIdx = priorMessages.length - 1;
       const stream = client.messages.stream({
         model,
-        max_tokens: 4096,
-        system: agent().systemPrompt,
-        messages: activeConv.messages
-          .slice(0, assistantIdx)
-          .map((m) => ({ role: m.role, content: m.content })),
+        max_tokens: 32000,
+        system: [
+          {
+            type: 'text',
+            text: agent().systemPrompt,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages: priorMessages.map((m, i) => {
+          if (i !== lastIdx) return { role: m.role, content: m.content };
+          const blocks =
+            typeof m.content === 'string'
+              ? [{ type: 'text' as const, text: m.content }]
+              : m.content.map((b) => ({ ...b }));
+          const last = blocks[blocks.length - 1];
+          if (last) {
+            (last as { cache_control?: { type: 'ephemeral' } }).cache_control = { type: 'ephemeral' };
+          }
+          return { role: m.role, content: blocks };
+        }),
       });
 
       for await (const event of stream) {
@@ -188,6 +216,15 @@ const App: Component = () => {
         ) {
           setActiveConv('messages', assistantIdx, 'content', (c: string) => c + event.delta.text);
         }
+      }
+
+      const finalMsg = await stream.finalMessage();
+      const u = finalMsg.usage;
+      console.log(
+        `[cache] input=${u.input_tokens} write=${u.cache_creation_input_tokens ?? 0} read=${u.cache_read_input_tokens ?? 0}`,
+      );
+      if (finalMsg.stop_reason) {
+        setActiveConv('messages', assistantIdx, 'stopReason', finalMsg.stop_reason);
       }
 
       // Check for >>PLAN<< block after streaming completes
@@ -205,7 +242,9 @@ const App: Component = () => {
       refreshList();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      setActiveConv('messages', produce((m: ChatMessage[]) => { m.pop(); }));
+      // Keep the partial/errored assistant message so it stays inspectable via the "raw" toggle.
+      // The user can revert or fork if they want it out of the transcript.
+      setActiveConv('updatedAt', Date.now());
       upsertConversation({ ...activeConv });
     } finally {
       setBusy(false);
@@ -309,33 +348,53 @@ const App: Component = () => {
             </Show>
             <For each={activeConv.messages} keyed>
               {(m, index) => (
-                <Show when={m.content || m.modifiedFromRawMessage}>
-                  <div class={`${styles.msg} msg`}>
-                    <div class={styles.role}>
-                      {m.role === 'assistant' ? agent().name.toLowerCase() : 'you'}
-                      <Show when={m.model}>
-                        <span class={styles.msgModel}> · {m.model}</span>
-                      </Show>
-                    </div>
-                    <div class={styles.msgBody}>
-                      <Show
-                        when={m.role === 'assistant'}
-                        fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
+                <div class={`${styles.msg} msg`}>
+                  <div class={styles.role}>
+                    {m.role === 'assistant' ? agent().name.toLowerCase() : 'you'}
+                    <Show when={m.model}>
+                      <span class={styles.msgModel}> · {m.model}</span>
+                    </Show>
+                    <Show when={m.stopReason && m.stopReason !== 'end_turn' && m.stopReason !== 'tool_use'}>
+                      <span
+                        class={styles.stopReasonBadge}
+                        title={`Response ended with stop_reason: ${m.stopReason}`}
                       >
-                        <ReplyBox>
-                          {agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
-                        </ReplyBox>
-                      </Show>
-                      <div class={styles.msgActions}>
-                        <MessageActions
-                          index={index()}
-                          onFork={forkFrom}
-                          onRevert={revertTo}
-                        />
-                      </div>
+                        {m.stopReason === 'max_tokens' ? '⚠ truncated' : `⚠ ${m.stopReason}`}
+                      </span>
+                    </Show>
+                  </div>
+                  <div class={styles.msgBody}>
+                    <Show
+                      when={rawIds().has(m.id)}
+                      fallback={
+                        <Show
+                          when={m.role === 'assistant'}
+                          fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
+                        >
+                          <ReplyBox>
+                            {agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
+                          </ReplyBox>
+                        </Show>
+                      }
+                    >
+                      <pre class={styles.rawView}>
+                        {(() => {
+                          const raw = m.modifiedFromRawMessage ?? m.content;
+                          return typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
+                        })()}
+                      </pre>
+                    </Show>
+                    <div class={styles.msgActions}>
+                      <MessageActions
+                        index={index()}
+                        showingRaw={rawIds().has(m.id)}
+                        onFork={forkFrom}
+                        onRevert={revertTo}
+                        onToggleRaw={toggleRaw}
+                      />
                     </div>
                   </div>
-                </Show>
+                </div>
               )}
             </For>
             <Show when={error()}>

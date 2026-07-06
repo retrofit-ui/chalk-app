@@ -11,3 +11,11 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Override retrofit-ui's 720px reading-width cap on markdown blocks —
+   we want prose and layout containers to expand into available screen
+   width. Only visual widgets (chalk-graph, chalk-draw, chalk-sets) stay
+   bounded via their own container max-width rules. */
+.retrofit-markdown {
+  max-width: none !important;
+}

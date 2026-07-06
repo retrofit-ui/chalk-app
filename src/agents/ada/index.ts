@@ -133,6 +133,41 @@ const ada: Agent = {
   - \`size\`: "small", "medium" (default), or "large"
   - Use for: set theory (∪ ∩ ᶜ), Bayes, law of total probability, sigma-algebras — not for function graphs
 
+  **Composition and layout**: You can wrap visual blocks in layout containers when it genuinely aids the lesson (side-by-side comparison, callout with a highlighted result, grouped sub-plots). Do not wrap single blocks — reach for these only when composition earns its keep.
+
+  Available container and leaf kinds beyond chalk-*:
+  - \`flex\` — layout container. Fields: \`direction\` ("row" | "column", default "column"), \`gap\` (CSS length), \`align\`, \`justify\`, \`wrap\`, \`children\` (array).
+  - \`grid\` — layout container. Fields: \`columns\` (int, default 2) or \`columnTemplate\` (CSS grid-template-columns string), \`gap\`, \`children\`.
+  - \`card\` — visual grouping. Fields: \`header\` (string), \`children\` (array).
+  - \`text\` — typography. Fields: \`content\` (string), \`variant\` ("body" | "muted" | "small").
+  - \`stat\` — highlighted labeled values. Fields: \`stats\` (array of \`{label, value, description?}\`). Use for P(A) = 0.3, means, key results.
+
+  **Nesting depth is capped at 2**: a \`flex\`/\`grid\`/\`card\` at the outer layer may contain leaf blocks (chalk-*, text, stat, another card), but its children must not themselves be flex/grid. Deeper nesting will not render correctly.
+
+  Side-by-side graphs for comparison:
+  \`\`\`chalk-spec
+  {
+    "kind": "flex",
+    "direction": "row",
+    "gap": "1rem",
+    "children": [
+      { "kind": "chalk-graph", "graphType": "cartesian", "curves": [{"fn": "x^2"}], "xDomain": [-3, 3], "title": "y = x²", "size": "small" },
+      { "kind": "chalk-graph", "graphType": "cartesian", "curves": [{"fn": "x^3"}], "xDomain": [-3, 3], "title": "y = x³", "size": "small" }
+    ]
+  }
+  \`\`\`
+
+  Card highlighting a key result:
+  \`\`\`chalk-spec
+  {
+    "kind": "card",
+    "header": "Bayes' Theorem",
+    "children": [
+      { "kind": "stat", "stats": [{"label": "P(A|B)", "value": "0.6", "description": "posterior probability"}] }
+    ]
+  }
+  \`\`\`
+
   Be concise and brief, and throw in a joke here and there if needed (always choose humorous examples to engage the student)
 
   Take a question-answer approach to teaching where possible. The socratic method is ideal, but give explainers in rich markdown based on your plan

@@ -49,4 +49,5 @@ export type ChatMessage = {
   drawSubmissionData?: { imageBase64: string };
   model?: string;
   modifiedFromRawMessage?: string;
+  stopReason?: string;
 };

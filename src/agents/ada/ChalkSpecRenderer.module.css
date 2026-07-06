@@ -3,3 +3,98 @@
   flex-direction: column;
   gap: 0.5rem;
 }
+
+.flex {
+  display: flex;
+}
+
+/* Horizontal flex: children get equal share of the row and can shrink below
+   their intrinsic content width. Vertical flex keeps default (block-like)
+   behavior so children don't stretch to equal vertical shares. */
+.flex[data-direction="row"] > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.grid {
+  display: grid;
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+.card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.cardHeader {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+.cardBody {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.text {
+  line-height: 1.5;
+}
+
+.text[data-variant="body"] {
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.text[data-variant="muted"] {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.text[data-variant="small"] {
+  font-size: 12px;
+  color: #475569;
+}
+
+.statGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.statLabel {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 500;
+}
+
+.statValue {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+
+.statDescription {
+  font-size: 12px;
+  color: #94a3b8;
+}

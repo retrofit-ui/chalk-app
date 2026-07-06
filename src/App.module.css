@@ -136,6 +136,20 @@
   text-transform: none;
 }
 
+.stopReasonBadge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  border: 1px solid #fcd34d;
+  cursor: help;
+}
+
 .msgBody {
   position: relative;
 }
@@ -149,6 +163,20 @@
 
 .msg:hover .msgActions {
   display: flex;
+}
+
+.rawView {
+  margin: 0;
+  padding: 0.75rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 
