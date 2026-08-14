@@ -76,9 +76,10 @@ export type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: MessageContent;
-  kind?: 'graph-click' | 'draw-submission';
+  kind?: 'graph-click' | 'draw-submission' | 'answer-submit';
   graphClickData?: { points: Array<{ x: number; y: number }> };
   drawSubmissionData?: { imageBase64: string };
+  answerData?: { answers: Record<string, string> };
   model?: string;
   modifiedFromRawMessage?: string;
   stopReason?: string;

@@ -1,4 +1,5 @@
-import { type Component, For, Match, Show, Switch } from 'solid-js';
+import { type Component, createContext, For, Match, Show, Switch, useContext } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { SpecRenderer } from '@retrofit-ui/spa-solid-shoelace/components';
 import type { RootSpec } from '@retrofit-ui/core';
 import type { ChalkViewSpec, ChalkGraphSpec, ChalkDrawSpec, ChalkSetsSpec } from './spec';
@@ -11,6 +12,25 @@ type ViewNodeProps = {
   onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
   onDrawSubmit?: (imageBase64: string) => void;
 };
+
+type AnswerContextValue = {
+  answers: Record<string, string>;
+  setAnswer: (identifier: string, value: string) => void;
+};
+
+const AnswerContext = createContext<AnswerContextValue>();
+
+function collectAnswerBoxIdentifiers(nodes: ViewNodeProps['spec'][], out: string[] = []): string[] {
+  for (const node of nodes) {
+    if (node.kind === 'answerbox' && typeof node.identifier === 'string') {
+      out.push(node.identifier);
+    }
+    if (Array.isArray(node.children)) {
+      collectAnswerBoxIdentifiers(node.children as ViewNodeProps['spec'][], out);
+    }
+  }
+  return out;
+}
 
 const ViewNode: Component<ViewNodeProps> = (props) => {
   return (
@@ -87,6 +107,26 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
           />
         </div>
       </Match>
+      <Match when={props.spec.kind === 'answerbox'}>
+        {(() => {
+          const ctx = useContext(AnswerContext);
+          const identifier = props.spec.identifier as string;
+          return (
+            <div class="flex flex-col gap-1 max-w-64">
+              <Show when={props.spec.label as string | undefined}>
+                <label class="text-xs font-medium text-slate-600">{props.spec.label as string}</label>
+              </Show>
+              <input
+                type="text"
+                class="text-sm py-1.5 px-2.5 border border-slate-300 rounded-md text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder={props.spec.placeholder as string | undefined}
+                value={ctx?.answers[identifier] ?? ''}
+                onInput={(e) => ctx?.setAnswer(identifier, e.currentTarget.value)}
+              />
+            </div>
+          );
+        })()}
+      </Match>
       <Match when={props.spec.kind === 'stat'}>
         <div class="flex flex-wrap gap-4">
           <For
@@ -123,19 +163,40 @@ const ChalkSpecRenderer: Component<{
   chunks: ChalkViewSpec[];
   onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
   onDrawSubmit?: (imageBase64: string) => void;
+  onAnswerSubmit?: (answers: Record<string, string>) => void;
 }> = (props) => {
+  const [answers, setAnswers] = createStore<Record<string, string>>({});
+  const answerContext: AnswerContextValue = {
+    get answers() {
+      return answers;
+    },
+    setAnswer: (identifier, value) => setAnswers(identifier, value),
+  };
+  const identifiers = () => collectAnswerBoxIdentifiers(props.chunks as ViewNodeProps['spec'][]);
+
   return (
-    <div class="flex flex-col gap-2">
-      <For each={props.chunks}>
-        {(chunk) => (
-          <ViewNode
-            spec={chunk as ViewNodeProps['spec']}
-            onGraphClick={props.onGraphClick}
-            onDrawSubmit={props.onDrawSubmit}
-          />
-        )}
-      </For>
-    </div>
+    <AnswerContext.Provider value={answerContext}>
+      <div class="flex flex-col gap-2">
+        <For each={props.chunks}>
+          {(chunk) => (
+            <ViewNode
+              spec={chunk as ViewNodeProps['spec']}
+              onGraphClick={props.onGraphClick}
+              onDrawSubmit={props.onDrawSubmit}
+            />
+          )}
+        </For>
+        <Show when={identifiers().length > 0}>
+          <button
+            class="self-start text-xs py-1.5 px-3.5 border-none rounded bg-blue-600 text-white cursor-pointer font-medium hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
+            disabled={identifiers().some((id) => !(answers[id] ?? '').trim())}
+            onClick={() => props.onAnswerSubmit?.({ ...answers })}
+          >
+            Submit
+          </button>
+        </Show>
+      </div>
+    </AnswerContext.Provider>
   );
 };
 

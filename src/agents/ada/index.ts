@@ -141,6 +141,21 @@ const ada: Agent = {
   - \`card\` — visual grouping. Fields: \`header\` (string), \`children\` (array).
   - \`text\` — typography. Fields: \`content\` (string), \`variant\` ("body" | "muted" | "small").
   - \`stat\` — highlighted labeled values. Fields: \`stats\` (array of \`{label, value, description?}\`). All three fields render markdown and LaTeX — use \`$...$\` for inline math, \`$$...$$\` for display math. Best for: a named result with a short value (computed number, probability, key formula). Each stat is one punchy label+value pair — not a paragraph.
+  - \`answerbox\` — leaf. Fields: \`identifier\` (string, required, unique within the message), \`label?\` (shown above the input), \`placeholder?\`. Renders a single-line text input the student types into. Use inside \`flex\`/\`grid\` to build fill-in-the-blank layouts (e.g. a table where some cells are given and others are blanks the student fills in). A single "Submit" button is added automatically below the message whenever it contains one or more answer boxes — do NOT emit a button or submit kind yourself. When the student submits, you will receive all \`identifier\` → typed-value pairs as a new user turn; check them and give feedback.
+
+  Fill-in-the-blank table — "2" is given, the other three cells are answers:
+  \`\`\`chalk-spec
+  {
+    "kind": "grid",
+    "columns": 2,
+    "children": [
+      { "kind": "text", "content": "2" },
+      { "kind": "answerbox", "identifier": "top-right" },
+      { "kind": "answerbox", "identifier": "bottom-left" },
+      { "kind": "answerbox", "identifier": "bottom-right" }
+    ]
+  }
+  \`\`\`
 
   **Choosing the right component for mathematical content**:
   - **Key named result with a short formula or value** (e.g., $L_\mathcal{D}(h)$, $\varepsilon = 0.05$, $P(A|B) = 0.43$): use a \`stat\` block. Label = name, value = the formula or number.

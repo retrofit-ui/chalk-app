@@ -317,6 +317,16 @@ const App: Component = () => {
     });
   };
 
+  const onAnswerSubmit = (answers: Record<string, string>) => {
+    const summary = Object.entries(answers).map(([k, v]) => `- ${k}: ${v}`).join('\n');
+    void sendMessage({
+      role: 'user',
+      content: `I've filled in my answers:\n${summary}`,
+      kind: 'answer-submit',
+      answerData: { answers },
+    });
+  };
+
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -423,10 +433,10 @@ const App: Component = () => {
                         fallback={
                           <Show
                             when={m.role === 'assistant'}
-                            fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
+                            fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit })}
                           >
                             <ReplyBox>
-                              {agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
+                              {agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit })}
                             </ReplyBox>
                           </Show>
                         }

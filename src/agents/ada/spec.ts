@@ -67,6 +67,13 @@ export type ChalkSetsSpec = {
   size?: 'small' | 'medium' | 'large';
 };
 
+export type ChalkAnswerBoxSpec = {
+  kind: 'answerbox';
+  identifier: string;
+  label?: string;
+  placeholder?: string;
+};
+
 // Chunks in a Chalk message are either a top-level retrofit spec or a chalk-specific spec.
 // Using RootSpec (not ViewSpec) because chunks are rendered via SpecRenderer which accepts RootSpec.
-export type ChalkViewSpec = RootSpec | ChalkGraphSpec | ChalkDrawSpec | ChalkSetsSpec;
+export type ChalkViewSpec = RootSpec | ChalkGraphSpec | ChalkDrawSpec | ChalkSetsSpec | ChalkAnswerBoxSpec;

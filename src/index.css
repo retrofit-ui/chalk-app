@@ -21,3 +21,48 @@ code {
 .retrofit-markdown {
   max-width: none !important;
 }
+
+/* retrofit-ui ships no table styling for markdown content, so tables
+   render with the browser's borderless defaults. This app never loads
+   Shoelace's theme stylesheet (only individual components), so
+   --sl-color-* tokens are undefined here — use plain colors instead,
+   with a prefers-color-scheme fallback since there's no app-level
+   theme toggle. */
+.retrofit-markdown table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: auto;
+}
+
+.retrofit-markdown th,
+.retrofit-markdown td {
+  border: 1px solid #d4d4d4;
+  padding: 0.5em 0.9em;
+  text-align: left;
+}
+
+.retrofit-markdown th {
+  background: #f5f5f5;
+  color: #171717;
+  font-weight: 600;
+}
+
+.retrofit-markdown tr:nth-child(even) td {
+  background: #fafafa;
+}
+
+@media (prefers-color-scheme: dark) {
+  .retrofit-markdown th,
+  .retrofit-markdown td {
+    border-color: #404040;
+  }
+
+  .retrofit-markdown th {
+    background: #262626;
+    color: #f5f5f5;
+  }
+
+  .retrofit-markdown tr:nth-child(even) td {
+    background: #1f1f1f;
+  }
+}

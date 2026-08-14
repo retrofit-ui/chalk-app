@@ -1,4 +1,4 @@
-import { type Component } from 'solid-js';
+import { type Component, For } from 'solid-js';
 import type { HarnessProps } from '../types';
 import type { ChalkViewSpec } from './spec';
 import ChalkSpecRenderer from './ChalkSpecRenderer';
@@ -58,6 +58,14 @@ const GraphClickEvent: Component<{ points: Array<{ x: number; y: number }> }> = 
   </div>
 );
 
+const AnswerSubmitEvent: Component<{ answers: Record<string, string> }> = (props) => (
+  <div class="inline-flex flex-col gap-1 text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg py-1.5 px-2.5 font-mono self-start">
+    <For each={Object.entries(props.answers)}>
+      {([identifier, value]) => <span>{identifier}: {value}</span>}
+    </For>
+  </div>
+);
+
 const DrawSubmissionEvent: Component<{ imageBase64: string }> = (props) => (
   <div class="inline-block border border-slate-200 rounded-lg overflow-hidden self-start">
     <img
@@ -75,6 +83,9 @@ const Harness: Component<HarnessProps> = (props) => {
   if (props.message.kind === 'draw-submission' && props.message.drawSubmissionData) {
     return <DrawSubmissionEvent imageBase64={props.message.drawSubmissionData.imageBase64} />;
   }
+  if (props.message.kind === 'answer-submit' && props.message.answerData) {
+    return <AnswerSubmitEvent answers={props.message.answerData.answers} />;
+  }
   if (props.message.role === 'user') {
     return (
       <div class="whitespace-pre-wrap leading-relaxed text-sm bg-indigo-50 border border-indigo-100 text-indigo-950 py-2.5 px-3.5 rounded-xl self-start">
@@ -87,6 +98,7 @@ const Harness: Component<HarnessProps> = (props) => {
       chunks={parseChunks(props.message.content as string)}
       onGraphClick={props.onGraphClick}
       onDrawSubmit={props.onDrawSubmit}
+      onAnswerSubmit={props.onAnswerSubmit}
     />
   );
 };

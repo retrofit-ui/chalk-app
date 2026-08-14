@@ -11,6 +11,7 @@ export type HarnessProps = {
   message: ChatMessage;
   onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
   onDrawSubmit?: (imageBase64: string) => void;
+  onAnswerSubmit?: (answers: Record<string, string>) => void;
 };
 
 export type Agent = {
