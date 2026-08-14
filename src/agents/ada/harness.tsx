@@ -2,7 +2,6 @@ import { type Component } from 'solid-js';
 import type { HarnessProps } from '../types';
 import type { ChalkViewSpec } from './spec';
 import ChalkSpecRenderer from './ChalkSpecRenderer';
-import styles from './harness.module.css';
 
 const CHALK_SPEC_FENCE = /```chalk-spec\n([\s\S]*?)\n```/g;
 const CHALK_SPEC_OPENER = '```chalk-spec';
@@ -49,8 +48,8 @@ function parseChunks(content: string): ChalkViewSpec[] {
 }
 
 const GraphClickEvent: Component<{ points: Array<{ x: number; y: number }> }> = (props) => (
-  <div class={styles.graphClickEvent}>
-    <span class={styles.graphClickIcon}>⊕</span>
+  <div class="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-300 rounded-lg py-1 px-2.5 font-mono self-start">
+    <span class="text-sm text-slate-500">⊕</span>
     <span>
       {props.points.length === 1
         ? `clicked (${props.points[0].x}, ${props.points[0].y})`
@@ -60,9 +59,9 @@ const GraphClickEvent: Component<{ points: Array<{ x: number; y: number }> }> = 
 );
 
 const DrawSubmissionEvent: Component<{ imageBase64: string }> = (props) => (
-  <div class={styles.drawSubmission}>
+  <div class="inline-block border border-slate-200 rounded-lg overflow-hidden self-start">
     <img
-      class={styles.drawThumbnail}
+      class="block max-w-80 max-h-56 w-full"
       src={`data:image/png;base64,${props.imageBase64}`}
       alt="Student drawing"
     />
@@ -77,7 +76,11 @@ const Harness: Component<HarnessProps> = (props) => {
     return <DrawSubmissionEvent imageBase64={props.message.drawSubmissionData.imageBase64} />;
   }
   if (props.message.role === 'user') {
-    return <div class={styles.userContent}>{props.message.content as string}</div>;
+    return (
+      <div class="whitespace-pre-wrap leading-relaxed text-sm bg-indigo-50 border border-indigo-100 text-indigo-950 py-2.5 px-3.5 rounded-xl self-start">
+        {props.message.content as string}
+      </div>
+    );
   }
   return (
     <ChalkSpecRenderer

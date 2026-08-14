@@ -1,6 +1,5 @@
 import { type Component, onMount } from 'solid-js';
 import type { ChalkDrawSpec } from './spec';
-import styles from './DrawCanvas.module.css';
 
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 420;
@@ -147,12 +146,12 @@ const DrawCanvas: Component<{
   };
 
   return (
-    <div class={styles.container} style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
-      {props.spec.title && <div class={styles.title}>{props.spec.title}</div>}
-      {props.spec.prompt && <div class={styles.prompt}>{props.spec.prompt}</div>}
+    <div class="my-2 max-w-160" style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
+      {props.spec.title && <div class="text-sm font-semibold text-slate-700 mb-1">{props.spec.title}</div>}
+      {props.spec.prompt && <div class="text-sm text-slate-600 mb-2 italic">{props.spec.prompt}</div>}
       <canvas
         ref={canvas}
-        class={styles.canvas}
+        class="block w-full border border-slate-200 rounded-md cursor-crosshair touch-none"
         onMouseDown={startDraw}
         onMouseMove={draw}
         onMouseUp={stopDraw}
@@ -161,9 +160,19 @@ const DrawCanvas: Component<{
         onTouchMove={draw}
         onTouchEnd={stopDraw}
       />
-      <div class={styles.actions}>
-        <button class={styles.clearBtn} onClick={clear}>Clear</button>
-        <button class={styles.submitBtn} onClick={submit}>Submit drawing</button>
+      <div class="flex gap-2 mt-2">
+        <button
+          class="text-xs py-1 px-2.5 border border-slate-300 rounded bg-slate-50 text-slate-500 cursor-pointer hover:bg-slate-100"
+          onClick={clear}
+        >
+          Clear
+        </button>
+        <button
+          class="text-xs py-1 px-3.5 border-none rounded bg-blue-600 text-white cursor-pointer font-medium hover:bg-blue-700"
+          onClick={submit}
+        >
+          Submit drawing
+        </button>
       </div>
     </div>
   );

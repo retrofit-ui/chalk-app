@@ -1,7 +1,7 @@
 import { type Component, createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import functionPlot from 'function-plot';
 import type { ChalkGraphSpec } from './spec';
-import styles from './CartesianGraph.module.css';
+import './CartesianGraph.css';
 
 const FALLBACK_HEIGHT = 300;
 const MAX_HEIGHT = 480;
@@ -138,20 +138,30 @@ const CartesianGraph: Component<{
   };
 
   return (
-    <div class={styles.container} style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
-      {props.spec.title && <div class={styles.title}>{props.spec.title}</div>}
-      <div ref={el} class={styles.plot} />
+    <div class="my-2 max-w-160" style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
+      {props.spec.title && <div class="text-sm font-semibold text-slate-700 mb-1">{props.spec.title}</div>}
+      <div ref={el} class="chalk-plot w-full" />
       <Show when={props.spec.interactive && props.onGraphClick}>
-        <div class={styles.interactiveBar}>
+        <div class="flex items-center gap-2 mt-1.5 min-h-7">
           <Show
             when={pendingClicks().length > 0}
-            fallback={<span class={styles.interactiveHint}>Click the graph to mark points</span>}
+            fallback={<span class="text-xs text-slate-400 italic">Click the graph to mark points</span>}
           >
-            <span class={styles.clickCount}>
+            <span class="text-xs text-slate-500 font-mono">
               {pendingClicks().length} point{pendingClicks().length > 1 ? 's' : ''} marked
             </span>
-            <button class={styles.clearBtn} onClick={() => setPendingClicks([])}>Clear</button>
-            <button class={styles.submitBtn} onClick={submit}>Submit</button>
+            <button
+              class="text-xs py-0.5 px-2 border border-slate-300 rounded bg-slate-50 text-slate-500 cursor-pointer hover:bg-slate-100"
+              onClick={() => setPendingClicks([])}
+            >
+              Clear
+            </button>
+            <button
+              class="text-xs py-0.5 px-2.5 border-none rounded bg-blue-600 text-white cursor-pointer font-medium hover:bg-blue-700"
+              onClick={submit}
+            >
+              Submit
+            </button>
           </Show>
         </div>
       </Show>

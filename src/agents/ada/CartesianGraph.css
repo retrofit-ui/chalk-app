@@ -1,0 +1,31 @@
+/* function-plot renders its own SVG internals into the container we give it —
+   these selectors target that third-party markup, which Tailwind utilities
+   on our JSX can't reach. Kept as plain global CSS scoped to .chalk-plot. */
+.chalk-plot .function-plot {
+  font-family: inherit;
+}
+
+/* Scatter point dots — override function-plot's hardcoded r=1 */
+.chalk-plot circle.scatter {
+  r: 6px;
+}
+
+/* Axis and grid styling */
+.chalk-plot .function-plot .axis path,
+.chalk-plot .function-plot .axis line {
+  stroke: #e2e8f0;
+}
+
+.chalk-plot .function-plot .axis text {
+  fill: #64748b;
+  font-size: 0.7rem;
+}
+
+.chalk-plot .function-plot .grid line {
+  stroke: #f1f5f9;
+}
+
+/* Curve lines — slightly thicker than default */
+.chalk-plot .function-plot path.line {
+  stroke-width: 2px;
+}

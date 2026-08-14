@@ -1,6 +1,5 @@
 import { type Component, createSignal, For, Show } from 'solid-js';
 import type { ChalkSetsSpec } from './spec';
-import styles from './SetsRenderer.module.css';
 
 const PALETTE = [
   '#2563eb', '#dc2626', '#16a34a', '#9333ea',
@@ -32,12 +31,12 @@ const SetsRenderer: Component<{
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
 
   return (
-    <div class={styles.container} style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
+    <div class="my-2 max-w-140" style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
       <Show when={props.spec.title}>
-        <div class={styles.title}>{props.spec.title}</div>
+        <div class="text-sm font-semibold text-slate-700 mb-1">{props.spec.title}</div>
       </Show>
       <svg
-        class={styles.svg}
+        class="block w-full rounded-md bg-white"
         viewBox="0 0 560 380"
         width="100%"
         height="auto"
@@ -118,7 +117,7 @@ const SetsRenderer: Component<{
               <g
                 onMouseEnter={() => setHoveredId(s.id)}
                 onMouseLeave={() => setHoveredId(null)}
-                class={styles.setShape}
+                class="cursor-default"
               >
                 <ellipse
                   cx={toSVGX(s.cx)}

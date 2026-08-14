@@ -4,6 +4,7 @@ import {
   AVAILABLE_MODELS,
   DEFAULT_MODEL,
   clearStoredKey,
+  estimateCost,
   getStoredKey,
   isKeyFromEnv,
   makeClient,
@@ -28,8 +29,9 @@ import { AGENTS, getAgent } from './agents/index';
 import LessonPlan from './components/LessonPlan';
 import MessageActions from './components/MessageActions';
 import ReplyBox from './components/ReplyBox';
+import DebugPanel from './components/DebugPanel';
 import Sidebar from './Sidebar';
-import styles from './App.module.css';
+import { formatCost, formatTokens } from './format';
 
 function resolveInitialConv(): Conversation {
   const savedId = getActiveId();
@@ -59,6 +61,18 @@ const App: Component = () => {
       return next;
     });
   };
+  const [debugIds, setDebugIds] = createSignal<Set<string>>(new Set());
+  const toggleDebug = (index: number) => {
+    const id = activeConv.messages[index]?.id;
+    if (!id) return;
+    setDebugIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const debugMessageCount = () => activeConv.messages.reduce((n, m) => n + (m.debug ? 1 : 0), 0);
   let textareaRef: HTMLTextAreaElement | undefined;
   let messagesRef: HTMLElement | undefined;
 
@@ -223,6 +237,27 @@ const App: Component = () => {
       console.log(
         `[cache] input=${u.input_tokens} write=${u.cache_creation_input_tokens ?? 0} read=${u.cache_read_input_tokens ?? 0}`,
       );
+
+      const turnCost = estimateCost(model, u);
+      setActiveConv('usage', (prev) => ({
+        inputTokens: (prev?.inputTokens ?? 0) + u.input_tokens,
+        outputTokens: (prev?.outputTokens ?? 0) + u.output_tokens,
+        cacheCreationTokens: (prev?.cacheCreationTokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
+        cacheReadTokens: (prev?.cacheReadTokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+        costUsd: (prev?.costUsd ?? 0) + turnCost,
+      }));
+
+      setActiveConv('messages', assistantIdx, 'debug', {
+        estimatedCostUsd: turnCost,
+        usage: finalMsg.usage,
+        id: finalMsg.id,
+        model: finalMsg.model,
+        role: finalMsg.role,
+        type: finalMsg.type,
+        stop_reason: finalMsg.stop_reason,
+        stop_sequence: finalMsg.stop_sequence,
+      });
+
       if (finalMsg.stop_reason) {
         setActiveConv('messages', assistantIdx, 'stopReason', finalMsg.stop_reason);
       }
@@ -290,7 +325,7 @@ const App: Component = () => {
   };
 
   return (
-    <div class={styles.shell}>
+    <div class="flex h-screen overflow-hidden">
       <Show when={apiKey()} fallback={<KeyGate onSave={saveKey} />}>
         <Sidebar
           conversations={convList()}
@@ -301,19 +336,19 @@ const App: Component = () => {
           onSelectExample={selectExample}
         />
 
-        <div class={styles.main}>
-          <header class={styles.header}>
-            <span class={styles.convTitle}>{activeConv.title}</span>
+        <div class="flex-1 flex flex-col min-w-0">
+          <header class="flex items-baseline gap-3 py-4 px-5 border-b border-gray-200 flex-shrink-0">
+            <span class="text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{activeConv.title}</span>
             <button
-              class={styles.planBtn}
+              class="bg-transparent border-none text-[15px] text-gray-300 cursor-pointer py-0 px-0.5 leading-none flex-shrink-0 hover:text-gray-600"
               title="View lesson plan"
               onClick={() => setPlanOpen((o) => !o)}
             >
               {activeConv.plans.length > 0 ? 'ⓘ' : '○'}
             </button>
-            <div class={styles.headerMeta}>
+            <div class="flex items-baseline gap-2 flex-shrink-0">
               <select
-                class={styles.agentSelect}
+                class="text-xs font-semibold text-gray-600 bg-transparent border-none cursor-pointer outline-none p-0 hover:text-gray-900 disabled:opacity-50 disabled:cursor-default"
                 value={activeConv.agentId}
                 onChange={(e) => setAgentId(e.currentTarget.value)}
                 disabled={busy()}
@@ -323,7 +358,7 @@ const App: Component = () => {
                 </For>
               </select>
               <select
-                class={styles.modelSelect}
+                class="text-[11px] text-gray-300 font-mono bg-transparent border-none cursor-pointer outline-none p-0 hover:text-gray-400 disabled:opacity-50 disabled:cursor-default"
                 value={activeConv.model}
                 onChange={(e) => setModel(e.currentTarget.value)}
                 disabled={busy()}
@@ -333,80 +368,113 @@ const App: Component = () => {
                 </For>
               </select>
             </div>
-            <div class={styles.headerActions}>
+            <div class="ml-auto flex gap-3 flex-shrink-0">
+              <Show when={activeConv.usage}>
+                <span
+                  class="text-xs text-gray-500 font-mono whitespace-nowrap cursor-default"
+                  title={`${formatTokens(activeConv.usage!.inputTokens)} input, ${formatTokens(activeConv.usage!.outputTokens)} output, ${formatTokens(activeConv.usage!.cacheReadTokens)} cache read, ${formatTokens(activeConv.usage!.cacheCreationTokens)} cache write`}
+                >
+                  {formatCost(activeConv.usage!.costUsd)}
+                  {' · '}
+                  {formatTokens(
+                    activeConv.usage!.inputTokens +
+                    activeConv.usage!.outputTokens +
+                    activeConv.usage!.cacheCreationTokens +
+                    activeConv.usage!.cacheReadTokens,
+                  )}
+                  {' tokens'}
+                </span>
+              </Show>
               <Show when={!isKeyFromEnv()}>
-                <button class={styles.linkBtn} onClick={forgetKey}>
+                <button class="bg-transparent border-none text-gray-500 cursor-pointer text-sm p-0 hover:text-gray-700" onClick={forgetKey}>
                   clear key
                 </button>
               </Show>
             </div>
           </header>
 
-          <main ref={messagesRef} class={styles.messages}>
+          <main ref={messagesRef} class="flex-1 overflow-y-auto py-6 px-5 flex flex-col gap-5">
             <Show when={activeConv.messages.length === 0 && !input()}>
-              <div class={styles.empty}>Say something to {agent().name}.</div>
+              <div class="text-gray-300 text-center mt-15">Say something to {agent().name}.</div>
             </Show>
             <For each={activeConv.messages} keyed>
-              {(m, index) => (
-                <div class={`${styles.msg} msg`}>
-                  <div class={styles.role}>
+              {(m, index) => {
+                const showDebug = () => debugIds().has(m.id) && Boolean(m.debug);
+                return (
+                <div class="group flex flex-col gap-1 relative">
+                  <div class="text-[11px] uppercase tracking-wider text-gray-400">
                     {m.role === 'assistant' ? agent().name.toLowerCase() : 'you'}
                     <Show when={m.model}>
-                      <span class={styles.msgModel}> · {m.model}</span>
+                      <span class="text-[10px] text-gray-300 tracking-normal normal-case"> · {m.model}</span>
                     </Show>
                     <Show when={m.stopReason && m.stopReason !== 'end_turn' && m.stopReason !== 'tool_use'}>
                       <span
-                        class={styles.stopReasonBadge}
+                        class="ml-1.5 py-px px-1.5 rounded-sm bg-amber-100 text-amber-800 text-[10px] font-semibold tracking-normal normal-case border border-amber-300 cursor-help"
                         title={`Response ended with stop_reason: ${m.stopReason}`}
                       >
                         {m.stopReason === 'max_tokens' ? '⚠ truncated' : `⚠ ${m.stopReason}`}
                       </span>
                     </Show>
                   </div>
-                  <div class={styles.msgBody}>
-                    <Show
-                      when={rawIds().has(m.id)}
-                      fallback={
-                        <Show
-                          when={m.role === 'assistant'}
-                          fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
-                        >
-                          <ReplyBox>
-                            {agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
-                          </ReplyBox>
-                        </Show>
-                      }
-                    >
-                      <pre class={styles.rawView}>
-                        {(() => {
-                          const raw = m.modifiedFromRawMessage ?? m.content;
-                          return typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
-                        })()}
-                      </pre>
-                    </Show>
-                    <div class={styles.msgActions}>
-                      <MessageActions
-                        index={index()}
-                        showingRaw={rawIds().has(m.id)}
-                        onFork={forkFrom}
-                        onRevert={revertTo}
-                        onToggleRaw={toggleRaw}
-                      />
+                  <div class={`relative ${showDebug() ? 'xl:flex xl:gap-4' : ''}`}>
+                    <div class={`relative min-w-0 ${showDebug() ? 'xl:flex-[3_1_0%]' : ''}`}>
+                      <Show
+                        when={rawIds().has(m.id)}
+                        fallback={
+                          <Show
+                            when={m.role === 'assistant'}
+                            fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
+                          >
+                            <ReplyBox>
+                              {agent().Harness({ message: m, onGraphClick, onDrawSubmit })}
+                            </ReplyBox>
+                          </Show>
+                        }
+                      >
+                        <pre class="m-0 p-3 bg-slate-900 text-slate-200 font-mono text-[0.8rem] leading-normal rounded-md overflow-x-auto whitespace-pre-wrap break-words">
+                          {(() => {
+                            const raw = m.modifiedFromRawMessage ?? m.content;
+                            return typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
+                          })()}
+                        </pre>
+                      </Show>
+                      <div class="hidden group-hover:flex absolute bottom-2 right-2">
+                        <MessageActions
+                          index={index()}
+                          showingRaw={rawIds().has(m.id)}
+                          hasDebug={Boolean(m.debug)}
+                          showingDebug={debugIds().has(m.id)}
+                          onFork={forkFrom}
+                          onRevert={revertTo}
+                          onToggleRaw={toggleRaw}
+                          onToggleDebug={toggleDebug}
+                        />
+                      </div>
                     </div>
+                    <Show when={showDebug()}>
+                      <div class={`mt-2 max-h-100 overflow-y-auto overflow-x-hidden rounded-md ${showDebug() ? 'xl:flex-[1_1_0%] xl:max-w-[25%] xl:m-0 xl:max-h-none' : ''}`}>
+                        <DebugPanel
+                          debug={m.debug!}
+                          convUsage={activeConv.usage}
+                          messageCount={debugMessageCount()}
+                        />
+                      </div>
+                    </Show>
                   </div>
                 </div>
-              )}
+                );
+              }}
             </For>
             <Show when={error()}>
-              <div class={styles.error}>{error()}</div>
+              <div class="text-red-700 bg-red-50 py-2.5 px-3.5 rounded-lg text-sm">{error()}</div>
             </Show>
           </main>
 
-          <footer class={styles.composer}>
-            <div class={styles.composerRow}>
+          <footer class="pt-3 px-5 pb-4 border-t border-gray-200 flex-shrink-0">
+            <div class="flex gap-2">
               <textarea
                 ref={textareaRef}
-                class={styles.textarea}
+                class="flex-1 resize-none border border-gray-300 rounded-lg py-2.5 px-3 font-[inherit] text-sm outline-none w-full box-border focus:border-gray-500"
                 placeholder={`Message ${agent().name}…  (Enter to send, Shift+Enter for newline)`}
                 value={input()}
                 onInput={(e) => setInput(e.currentTarget.value)}
@@ -415,7 +483,7 @@ const App: Component = () => {
                 rows={3}
               />
               <button
-                class={styles.sendBtn}
+                class="border-none bg-gray-900 text-white px-5 rounded-lg cursor-pointer text-sm font-medium flex-shrink-0 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 onClick={send}
                 disabled={busy() || !input().trim()}
               >
@@ -440,14 +508,14 @@ const App: Component = () => {
 const KeyGate: Component<{ onSave: (key: string) => void }> = (props) => {
   const [value, setValue] = createSignal('');
   return (
-    <div class={styles.gate}>
-      <h1 class={styles.gateTitle}>chalk</h1>
-      <p class={styles.gateSub}>
+    <div class="w-full flex flex-col items-start max-w-110 my-20 mx-auto p-8 gap-3 box-border">
+      <h1 class="m-0 text-4xl font-light tracking-tight text-green-900">chalk</h1>
+      <p class="text-gray-500 m-0 mb-2 leading-normal text-sm">
         Bring your own Anthropic API key. Stored in localStorage, sent
-        directly to <code>api.anthropic.com</code>. No backend.
+        directly to <code class="bg-gray-100 py-0.5 px-1.5 rounded-sm text-[0.9em]">api.anthropic.com</code>. No backend.
       </p>
       <input
-        class={styles.gateInput}
+        class="border border-gray-300 rounded-lg py-2.5 px-3 font-[inherit] outline-none w-full box-border focus:border-gray-500"
         type="password"
         placeholder="sk-ant-…"
         value={value()}
@@ -457,15 +525,16 @@ const KeyGate: Component<{ onSave: (key: string) => void }> = (props) => {
         }}
       />
       <button
-        class={styles.gateBtn}
+        class="border-none bg-gray-900 text-white py-2.5 px-4 rounded-lg cursor-pointer text-sm font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
         disabled={!value().trim()}
         onClick={() => props.onSave(value().trim())}
       >
         Save & start chatting
       </button>
-      <p class={styles.gateHint}>
+      <p class="text-sm text-gray-500 mt-1">
         Get a key at{' '}
         <a
+          class="text-gray-600"
           href="https://console.anthropic.com/settings/keys"
           target="_blank"
           rel="noreferrer"

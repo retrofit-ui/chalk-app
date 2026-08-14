@@ -1,5 +1,5 @@
 import { DEFAULT_MODEL } from './anthropic';
-import type { ChatMessage } from './anthropic';
+import type { ChatMessage, Usage } from './anthropic';
 
 export type Conversation = {
   id: string;
@@ -10,6 +10,7 @@ export type Conversation = {
   model: string;
   agentId: string;
   plans: string[];
+  usage?: Usage;
   provenance?: {
     parentId: string;
     forkMessageIndex: number;

@@ -5,7 +5,6 @@ import type { ChalkViewSpec, ChalkGraphSpec, ChalkDrawSpec, ChalkSetsSpec } from
 import CartesianGraph from './CartesianGraph';
 import DrawCanvas from './DrawCanvas';
 import SetsRenderer from './SetsRenderer';
-import styles from './ChalkSpecRenderer.module.css';
 
 type ViewNodeProps = {
   spec: { kind: string } & Record<string, unknown>;
@@ -27,7 +26,7 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
       </Match>
       <Match when={props.spec.kind === 'flex'}>
         <div
-          class={styles.flex}
+          class="flex data-[direction=row]:*:flex-1 data-[direction=row]:*:min-w-0"
           data-direction={(props.spec.direction as string) ?? 'column'}
           style={{
             'flex-direction': (props.spec.direction as string) ?? 'column',
@@ -46,7 +45,7 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
       </Match>
       <Match when={props.spec.kind === 'grid'}>
         <div
-          class={styles.grid}
+          class="grid *:min-w-0"
           style={{
             'grid-template-columns':
               (props.spec.columnTemplate as string) ??
@@ -64,11 +63,11 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
         </div>
       </Match>
       <Match when={props.spec.kind === 'card'}>
-        <div class={styles.card}>
+        <div class="border border-slate-200 rounded-lg bg-white overflow-hidden">
           <Show when={props.spec.header as string | undefined}>
-            <div class={styles.cardHeader}>{props.spec.header as string}</div>
+            <div class="py-2 px-3 border-b border-slate-200 bg-slate-50 font-semibold text-sm text-slate-700">{props.spec.header as string}</div>
           </Show>
-          <div class={styles.cardBody}>
+          <div class="p-3 flex flex-col gap-2">
             <For each={props.spec.children as ViewNodeProps['spec'][]}>
               {(child) => (
                 <ViewNode spec={child} onGraphClick={props.onGraphClick} onDrawSubmit={props.onDrawSubmit} />
@@ -78,7 +77,10 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
         </div>
       </Match>
       <Match when={props.spec.kind === 'text'}>
-        <div class={styles.text} data-variant={(props.spec.variant as string) ?? 'body'}>
+        <div
+          class="leading-normal data-[variant=body]:text-sm data-[variant=body]:text-slate-800 data-[variant=muted]:text-[13px] data-[variant=muted]:text-slate-500 data-[variant=small]:text-xs data-[variant=small]:text-slate-600"
+          data-variant={(props.spec.variant as string) ?? 'body'}
+        >
           <SpecRenderer
             spec={{ kind: 'markdown', content: props.spec.content as string } as unknown as RootSpec}
             apiBase=""
@@ -86,18 +88,24 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
         </div>
       </Match>
       <Match when={props.spec.kind === 'stat'}>
-        <div class={styles.statGrid}>
+        <div class="flex flex-wrap gap-4">
           <For
             each={
               props.spec.stats as Array<{ label: string; value: number | string; description?: string }>
             }
           >
             {(s) => (
-              <div class={styles.stat}>
-                <div class={styles.statLabel}>{s.label}</div>
-                <div class={styles.statValue}>{s.value}</div>
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <div class="text-[11px] text-slate-500 uppercase tracking-wide font-medium">
+                  <SpecRenderer spec={{ kind: 'markdown', content: String(s.label) } as unknown as RootSpec} apiBase="" />
+                </div>
+                <div class="text-xl font-semibold text-slate-800 tabular-nums">
+                  <SpecRenderer spec={{ kind: 'markdown', content: String(s.value) } as unknown as RootSpec} apiBase="" />
+                </div>
                 <Show when={s.description}>
-                  <div class={styles.statDescription}>{s.description}</div>
+                  <div class="text-xs text-slate-400">
+                    <SpecRenderer spec={{ kind: 'markdown', content: s.description! } as unknown as RootSpec} apiBase="" />
+                  </div>
                 </Show>
               </div>
             )}
@@ -117,7 +125,7 @@ const ChalkSpecRenderer: Component<{
   onDrawSubmit?: (imageBase64: string) => void;
 }> = (props) => {
   return (
-    <div class={styles.column}>
+    <div class="flex flex-col gap-2">
       <For each={props.chunks}>
         {(chunk) => (
           <ViewNode
