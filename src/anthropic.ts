@@ -70,16 +70,19 @@ export function makeClient(apiKey: string): Anthropic {
 
 export type TextBlock = { type: 'text'; text: string };
 export type ImageBlock = { type: 'image'; source: { type: 'base64'; media_type: 'image/png'; data: string } };
-export type MessageContent = string | Array<TextBlock | ImageBlock>;
+export type ToolUseBlock = { type: 'tool_use'; id: string; name: string; input: unknown };
+export type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; content: string };
+export type MessageContent = string | Array<TextBlock | ImageBlock | ToolUseBlock | ToolResultBlock>;
 
 export type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: MessageContent;
-  kind?: 'graph-click' | 'draw-submission' | 'answer-submit';
+  kind?: 'graph-click' | 'draw-submission' | 'answer-submit' | 'tool-use' | 'tool-result';
   graphClickData?: { points: Array<{ x: number; y: number }> };
   drawSubmissionData?: { imageBase64: string };
   answerData?: { answers: Record<string, string> };
+  toolUseData?: { calls: Array<{ id: string; name: string; input: unknown }> };
   model?: string;
   modifiedFromRawMessage?: string;
   stopReason?: string;

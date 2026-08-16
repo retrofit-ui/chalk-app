@@ -12,6 +12,7 @@ export type HarnessProps = {
   onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
   onDrawSubmit?: (imageBase64: string) => void;
   onAnswerSubmit?: (answers: Record<string, string>) => void;
+  previousAnswers?: Record<string, string>;
 };
 
 export type Agent = {
@@ -21,6 +22,10 @@ export type Agent = {
   description: string;
   systemPrompt: string;
   skills: Skill[];
+  // Resolves a tool call named in `skills` locally (no network) and returns
+  // the text to send back as the tool_result. Absent/undefined tools are
+  // reported back to the model rather than thrown.
+  executeSkill?: (name: string, input: unknown) => string;
   // The harness renders a single message into JSX.
   // It owns the rendering decision: which retrofit-ui spec to emit,
   // which component to route to, how tool results look.

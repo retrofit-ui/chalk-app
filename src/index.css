@@ -22,6 +22,82 @@ code {
   max-width: none !important;
 }
 
+/* retrofit-ui's own markdown CSS (packages/spa-solid-shoelace/ui/layout.css)
+   isn't loaded here, and it leans on Shoelace's --sl-* tokens anyway (which
+   this app doesn't load — see the table comment below). Tailwind's preflight
+   zeroes out heading sizes/margins, list-style, and blockquote styling, so
+   without these rules `marked`'s output is structurally correct HTML that
+   renders visually flat. */
+.retrofit-markdown h1,
+.retrofit-markdown h2,
+.retrofit-markdown h3,
+.retrofit-markdown h4,
+.retrofit-markdown h5,
+.retrofit-markdown h6 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.2em 0 0.5em;
+}
+
+.retrofit-markdown h1 { font-size: 1.6em; }
+.retrofit-markdown h2 { font-size: 1.35em; }
+.retrofit-markdown h3 { font-size: 1.15em; }
+.retrofit-markdown h4,
+.retrofit-markdown h5,
+.retrofit-markdown h6 { font-size: 1em; }
+
+.retrofit-markdown p,
+.retrofit-markdown blockquote,
+.retrofit-markdown pre,
+.retrofit-markdown ul,
+.retrofit-markdown ol {
+  margin: 0 0 0.8em;
+}
+
+.retrofit-markdown ul,
+.retrofit-markdown ol {
+  padding-left: 1.5em;
+}
+
+.retrofit-markdown ul { list-style: disc; }
+.retrofit-markdown ol { list-style: decimal; }
+.retrofit-markdown li > ul,
+.retrofit-markdown li > ol {
+  margin: 0.3em 0 0;
+}
+
+.retrofit-markdown blockquote {
+  border-left: 3px solid #d4d4d4;
+  padding-left: 0.9em;
+  color: #525252;
+}
+
+.retrofit-markdown a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.retrofit-markdown hr {
+  margin: 1.2em 0;
+  border: none;
+  border-top: 1px solid #d4d4d4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .retrofit-markdown blockquote {
+    border-left-color: #404040;
+    color: #a3a3a3;
+  }
+
+  .retrofit-markdown a {
+    color: #60a5fa;
+  }
+
+  .retrofit-markdown hr {
+    border-top-color: #404040;
+  }
+}
+
 /* retrofit-ui ships no table styling for markdown content, so tables
    render with the browser's borderless defaults. This app never loads
    Shoelace's theme stylesheet (only individual components), so

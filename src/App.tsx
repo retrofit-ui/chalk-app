@@ -10,6 +10,8 @@ import {
   makeClient,
   setStoredKey,
   type ChatMessage,
+  type TextBlock,
+  type ToolUseBlock,
 } from './anthropic';
 import {
   deriveTitle,
@@ -26,6 +28,7 @@ import {
   type Conversation,
 } from './conversations';
 import { AGENTS, getAgent } from './agents/index';
+import { findPreviousAnswers } from './agents/ada/harness';
 import LessonPlan from './components/LessonPlan';
 import MessageActions from './components/MessageActions';
 import ReplyBox from './components/ReplyBox';
@@ -169,6 +172,8 @@ const App: Component = () => {
     upsertConversation({ ...activeConv });
   };
 
+  const MAX_TOOL_ROUNDS = 4;
+
   const sendMessage = async (userMsg: Omit<ChatMessage, 'id'>) => {
     const key = apiKey();
     if (!key || busy()) return;
@@ -177,15 +182,12 @@ const App: Component = () => {
     setBusy(true);
 
     const userMsgId = crypto.randomUUID();
-    const assistantMsgId = crypto.randomUUID();
 
     setActiveConv('messages', produce((m: ChatMessage[]) => {
       m.push({ id: userMsgId, ...userMsg });
-      m.push({ id: assistantMsgId, role: 'assistant', content: '' });
     }));
-    const assistantIdx = activeConv.messages.length - 1;
 
-    if (assistantIdx === 1) {
+    if (activeConv.messages.length === 1) {
       setActiveConv('title', deriveTitle(activeConv.messages));
     }
 
@@ -197,84 +199,133 @@ const App: Component = () => {
     try {
       const client = makeClient(key);
       const model = activeConv.model ?? DEFAULT_MODEL;
-      const priorMessages = activeConv.messages.slice(0, assistantIdx);
-      const lastIdx = priorMessages.length - 1;
-      const stream = client.messages.stream({
-        model,
-        max_tokens: 32000,
-        system: [
-          {
-            type: 'text',
-            text: agent().systemPrompt,
-            cache_control: { type: 'ephemeral' },
-          },
-        ],
-        messages: priorMessages.map((m, i) => {
-          if (i !== lastIdx) return { role: m.role, content: m.content };
-          const blocks =
-            typeof m.content === 'string'
-              ? [{ type: 'text' as const, text: m.content }]
-              : m.content.map((b) => ({ ...b }));
-          const last = blocks[blocks.length - 1];
-          if (last) {
-            (last as { cache_control?: { type: 'ephemeral' } }).cache_control = { type: 'ephemeral' };
+      const tools = agent().skills.length > 0 ? (agent().skills as never) : undefined;
+
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        const assistantMsgId = crypto.randomUUID();
+        setActiveConv('messages', produce((m: ChatMessage[]) => {
+          m.push({ id: assistantMsgId, role: 'assistant', content: '' });
+        }));
+        const assistantIdx = activeConv.messages.length - 1;
+
+        const priorMessages = activeConv.messages.slice(0, assistantIdx);
+        const lastIdx = priorMessages.length - 1;
+        const stream = client.messages.stream({
+          model,
+          max_tokens: 32000,
+          system: [
+            {
+              type: 'text',
+              text: agent().systemPrompt,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+          tools,
+          messages: priorMessages.map((m, i) => {
+            if (i !== lastIdx) return { role: m.role, content: m.content };
+            const blocks =
+              typeof m.content === 'string'
+                ? [{ type: 'text' as const, text: m.content }]
+                : m.content.map((b) => ({ ...b }));
+            const last = blocks[blocks.length - 1];
+            if (last) {
+              (last as { cache_control?: { type: 'ephemeral' } }).cache_control = { type: 'ephemeral' };
+            }
+            return { role: m.role, content: blocks };
+          }),
+        });
+
+        for await (const event of stream) {
+          if (
+            event.type === 'content_block_delta' &&
+            event.delta.type === 'text_delta'
+          ) {
+            setActiveConv('messages', assistantIdx, 'content', (c: string) => c + event.delta.text);
           }
-          return { role: m.role, content: blocks };
-        }),
-      });
-
-      for await (const event of stream) {
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'text_delta'
-        ) {
-          setActiveConv('messages', assistantIdx, 'content', (c: string) => c + event.delta.text);
         }
+
+        const finalMsg = await stream.finalMessage();
+        const u = finalMsg.usage;
+        console.log(
+          `[cache] round=${round} input=${u.input_tokens} write=${u.cache_creation_input_tokens ?? 0} read=${u.cache_read_input_tokens ?? 0}`,
+        );
+
+        const turnCost = estimateCost(model, u);
+        setActiveConv('usage', (prev) => ({
+          inputTokens: (prev?.inputTokens ?? 0) + u.input_tokens,
+          outputTokens: (prev?.outputTokens ?? 0) + u.output_tokens,
+          cacheCreationTokens: (prev?.cacheCreationTokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
+          cacheReadTokens: (prev?.cacheReadTokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+          costUsd: (prev?.costUsd ?? 0) + turnCost,
+        }));
+
+        setActiveConv('messages', assistantIdx, 'debug', {
+          estimatedCostUsd: turnCost,
+          usage: finalMsg.usage,
+          id: finalMsg.id,
+          model: finalMsg.model,
+          role: finalMsg.role,
+          type: finalMsg.type,
+          stop_reason: finalMsg.stop_reason,
+          stop_sequence: finalMsg.stop_sequence,
+        });
+
+        if (finalMsg.stop_reason) {
+          setActiveConv('messages', assistantIdx, 'stopReason', finalMsg.stop_reason);
+        }
+        setActiveConv('messages', assistantIdx, 'model', model);
+
+        if (finalMsg.stop_reason === 'tool_use') {
+          const toolUseBlocks = finalMsg.content.filter(
+            (b): b is { type: 'tool_use'; id: string; name: string; input: unknown } => b.type === 'tool_use',
+          );
+          const normalizedContent = finalMsg.content.flatMap(
+            (b): Array<TextBlock | ToolUseBlock> => {
+              if (b.type === 'text') return [{ type: 'text', text: b.text }];
+              if (b.type === 'tool_use') {
+                return [{ type: 'tool_use', id: b.id, name: b.name, input: b.input }];
+              }
+              return [];
+            },
+          );
+
+          setActiveConv('messages', assistantIdx, {
+            content: normalizedContent,
+            kind: 'tool-use',
+            toolUseData: { calls: toolUseBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })) },
+          });
+
+          const resultBlocks = toolUseBlocks.map((b) => ({
+            type: 'tool_result' as const,
+            tool_use_id: b.id,
+            content: agent().executeSkill?.(b.name, b.input) ?? `Unknown tool: ${b.name}`,
+          }));
+
+          setActiveConv('messages', produce((m: ChatMessage[]) => {
+            m.push({ id: crypto.randomUUID(), role: 'user', content: resultBlocks, kind: 'tool-result' });
+          }));
+
+          continue;
+        }
+
+        // Terminal turn — check for >>PLAN<< block after streaming completes
+        const rawContent = activeConv.messages[assistantIdx].content;
+        const { plan, reply } = extractPlanBlock(rawContent);
+        if (plan !== null) {
+          setActiveConv('messages', assistantIdx, 'modifiedFromRawMessage', rawContent);
+          setActiveConv('messages', assistantIdx, 'content', reply);
+          setActiveConv('plans', produce((ps: string[]) => { ps.push(plan); }));
+        }
+
+        setActiveConv('updatedAt', Date.now());
+        upsertConversation({ ...activeConv });
+        refreshList();
+        return;
       }
 
-      const finalMsg = await stream.finalMessage();
-      const u = finalMsg.usage;
-      console.log(
-        `[cache] input=${u.input_tokens} write=${u.cache_creation_input_tokens ?? 0} read=${u.cache_read_input_tokens ?? 0}`,
-      );
-
-      const turnCost = estimateCost(model, u);
-      setActiveConv('usage', (prev) => ({
-        inputTokens: (prev?.inputTokens ?? 0) + u.input_tokens,
-        outputTokens: (prev?.outputTokens ?? 0) + u.output_tokens,
-        cacheCreationTokens: (prev?.cacheCreationTokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
-        cacheReadTokens: (prev?.cacheReadTokens ?? 0) + (u.cache_read_input_tokens ?? 0),
-        costUsd: (prev?.costUsd ?? 0) + turnCost,
-      }));
-
-      setActiveConv('messages', assistantIdx, 'debug', {
-        estimatedCostUsd: turnCost,
-        usage: finalMsg.usage,
-        id: finalMsg.id,
-        model: finalMsg.model,
-        role: finalMsg.role,
-        type: finalMsg.type,
-        stop_reason: finalMsg.stop_reason,
-        stop_sequence: finalMsg.stop_sequence,
-      });
-
-      if (finalMsg.stop_reason) {
-        setActiveConv('messages', assistantIdx, 'stopReason', finalMsg.stop_reason);
-      }
-
-      // Check for >>PLAN<< block after streaming completes
-      const rawContent = activeConv.messages[assistantIdx].content;
-      const { plan, reply } = extractPlanBlock(rawContent);
-      if (plan !== null) {
-        setActiveConv('messages', assistantIdx, 'modifiedFromRawMessage', rawContent);
-        setActiveConv('messages', assistantIdx, 'content', reply);
-        setActiveConv('plans', produce((ps: string[]) => { ps.push(plan); }));
-      }
-
-      setActiveConv('messages', assistantIdx, 'model', model);
+      setError('Ada made too many tool calls in a row without replying — stopped after 4 rounds.');
       setActiveConv('updatedAt', Date.now());
       upsertConversation({ ...activeConv });
-      refreshList();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       // Keep the partial/errored assistant message so it stays inspectable via the "raw" toggle.
@@ -410,12 +461,42 @@ const App: Component = () => {
             <For each={activeConv.messages} keyed>
               {(m, index) => {
                 const showDebug = () => debugIds().has(m.id) && Boolean(m.debug);
+                const previousAnswers = () =>
+                  m.kind === 'answer-submit'
+                    ? findPreviousAnswers(activeConv.messages, index())
+                    : undefined;
+                const turnTokens = () => {
+                  const u = m.debug?.usage as
+                    | {
+                        input_tokens?: number;
+                        output_tokens?: number;
+                        cache_creation_input_tokens?: number | null;
+                        cache_read_input_tokens?: number | null;
+                      }
+                    | undefined;
+                  if (!u) return undefined;
+                  const fresh = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+                  const cached = u.cache_read_input_tokens ?? 0;
+                  const output = u.output_tokens ?? 0;
+                  return { total: fresh + cached + output, fresh, cached, output };
+                };
                 return (
+                <Show when={m.kind !== 'tool-result'}>
                 <div class="group flex flex-col gap-1 relative">
                   <div class="text-[11px] uppercase tracking-wider text-gray-400">
                     {m.role === 'assistant' ? agent().name.toLowerCase() : 'you'}
                     <Show when={m.model}>
                       <span class="text-[10px] text-gray-300 tracking-normal normal-case"> · {m.model}</span>
+                    </Show>
+                    <Show when={turnTokens()}>
+                      {(t) => (
+                        <span
+                          class="text-[10px] text-gray-300 tracking-normal normal-case cursor-help"
+                          title={`This reply: ${formatTokens(t().fresh)} fresh input + ${formatTokens(t().cached)} cache read + ${formatTokens(t().output)} output`}
+                        >
+                          {' '}· {formatTokens(t().total)} tok{t().cached > 0 ? ` (${formatTokens(t().cached)} cached)` : ''}
+                        </span>
+                      )}
                     </Show>
                     <Show when={m.stopReason && m.stopReason !== 'end_turn' && m.stopReason !== 'tool_use'}>
                       <span
@@ -433,10 +514,10 @@ const App: Component = () => {
                         fallback={
                           <Show
                             when={m.role === 'assistant'}
-                            fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit })}
+                            fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit, previousAnswers: previousAnswers() })}
                           >
                             <ReplyBox>
-                              {agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit })}
+                              {agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit, previousAnswers: previousAnswers() })}
                             </ReplyBox>
                           </Show>
                         }
@@ -472,6 +553,7 @@ const App: Component = () => {
                     </Show>
                   </div>
                 </div>
+                </Show>
                 );
               }}
             </For>

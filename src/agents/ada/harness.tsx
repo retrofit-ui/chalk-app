@@ -1,7 +1,20 @@
-import { type Component, For } from 'solid-js';
+import { type Component, For, Show } from 'solid-js';
 import type { HarnessProps } from '../types';
+import type { ChatMessage } from '../../anthropic';
 import type { ChalkViewSpec } from './spec';
 import ChalkSpecRenderer from './ChalkSpecRenderer';
+
+export function findPreviousAnswers(
+  messages: ChatMessage[],
+  index: number,
+): Record<string, string> | undefined {
+  for (let i = index - 1; i >= 0; i--) {
+    if (messages[i].kind === 'answer-submit' && messages[i].answerData) {
+      return messages[i].answerData!.answers;
+    }
+  }
+  return undefined;
+}
 
 const CHALK_SPEC_FENCE = /```chalk-spec\n([\s\S]*?)\n```/g;
 const CHALK_SPEC_OPENER = '```chalk-spec';
@@ -58,13 +71,51 @@ const GraphClickEvent: Component<{ points: Array<{ x: number; y: number }> }> = 
   </div>
 );
 
-const AnswerSubmitEvent: Component<{ answers: Record<string, string> }> = (props) => (
-  <div class="inline-flex flex-col gap-1 text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg py-1.5 px-2.5 font-mono self-start">
-    <For each={Object.entries(props.answers)}>
-      {([identifier, value]) => <span>{identifier}: {value}</span>}
-    </For>
-  </div>
-);
+const AnswerSubmitEvent: Component<{
+  answers: Record<string, string>;
+  previousAnswers?: Record<string, string>;
+}> = (props) => {
+  const summary = () =>
+    Object.entries(props.answers).map(([id, value]) => `${id}=${value}`).join(', ');
+  const changes = () => {
+    const prev = props.previousAnswers;
+    if (!prev) return [];
+    return Object.entries(props.answers)
+      .filter(([id, value]) => prev[id] !== undefined && prev[id] !== value)
+      .map(([id, value]) => `${id}: ${prev[id]}→${value}`);
+  };
+
+  return (
+    <details class="text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg py-1.5 px-2.5 font-mono self-start">
+      <summary class="cursor-pointer">
+        User answered: {summary()}
+        <Show when={changes().length > 0}> (changed {changes().join(', ')})</Show>
+      </summary>
+      <div class="flex flex-col gap-1 mt-1.5 pt-1.5 border-t border-slate-200">
+        <For each={Object.entries(props.answers)}>
+          {([identifier, value]) => <span>{identifier}: {value}</span>}
+        </For>
+      </div>
+    </details>
+  );
+};
+
+const ToolUseEvent: Component<{ calls: Array<{ id: string; name: string; input: unknown }> }> = (props) => {
+  const kinds = () => {
+    const all = props.calls.flatMap((c) => {
+      const input = c.input as { kinds?: unknown } | undefined;
+      return Array.isArray(input?.kinds) ? (input.kinds as string[]) : [c.name];
+    });
+    return [...new Set(all)];
+  };
+
+  return (
+    <div class="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-300 rounded-lg py-1 px-2.5 font-mono self-start">
+      <span class="text-sm text-slate-500">🔎</span>
+      <span>looked up: {kinds().join(', ')}</span>
+    </div>
+  );
+};
 
 const DrawSubmissionEvent: Component<{ imageBase64: string }> = (props) => (
   <div class="inline-block border border-slate-200 rounded-lg overflow-hidden self-start">
@@ -83,8 +134,16 @@ const Harness: Component<HarnessProps> = (props) => {
   if (props.message.kind === 'draw-submission' && props.message.drawSubmissionData) {
     return <DrawSubmissionEvent imageBase64={props.message.drawSubmissionData.imageBase64} />;
   }
+  if (props.message.kind === 'tool-use' && props.message.toolUseData) {
+    return <ToolUseEvent calls={props.message.toolUseData.calls} />;
+  }
   if (props.message.kind === 'answer-submit' && props.message.answerData) {
-    return <AnswerSubmitEvent answers={props.message.answerData.answers} />;
+    return (
+      <AnswerSubmitEvent
+        answers={props.message.answerData.answers}
+        previousAnswers={props.previousAnswers}
+      />
+    );
   }
   if (props.message.role === 'user') {
     return (
