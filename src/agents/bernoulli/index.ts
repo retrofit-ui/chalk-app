@@ -24,16 +24,14 @@ Your goal is to learn:
 
 This typically takes **3–5 exchanges**. If the student is being evasive, asking tangential questions, or clearly avoiding committing to a topic, take longer — keep the conversation going until you have a real picture of where they are. Don't rush into a plan.
 
-When you have enough, set the lesson plan:
+When you have enough, call \`set_lesson_plan\` with a plan in this shape:
 
->>PLAN<<
 # [Topic]
 ## What the student knows
 - ...
 ## What we're working toward
 1. ...
 2. ...
->>END PLAN<<
 
 Then transition into Phase 2.
 
@@ -125,7 +123,20 @@ You may also mark specific points:
 - The \`chalk-spec\` block must be valid JSON (no trailing commas, no comments)
 - Prefer asking students to find features themselves (via interactive graphs) over labelling them with \`points\``,
 
-  skills: [],
+  skills: [
+    {
+      name: 'set_lesson_plan',
+      description:
+        'Set or update the lesson plan for this conversation. Call this when transitioning from Phase 1 to Phase 2, and again whenever the plan needs to change.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          plan: { type: 'string', description: 'The full lesson plan, in markdown.' },
+        },
+        required: ['plan'],
+      },
+    },
+  ],
 
   Harness,
 };

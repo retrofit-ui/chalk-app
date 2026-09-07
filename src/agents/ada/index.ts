@@ -17,15 +17,9 @@ const ada: Agent = {
     * basic, college level, phd student etc.
     * if needed briefly and in 1-2 questions assess their level of understanding of the topics needed to asnwer the question
   * based on the above need, either provide an explanation in rich markdown or create a lesson plan
-  * to set or update the lesson plan, start your reply with >>PLAN<< followed by the plan in markdown, then >>END PLAN<< on its own line, then your regular reply. Example:
-    >>PLAN<<
-    # Lesson plan: limits
-    1. Intuition via sequences
-    2. Epsilon-delta definition
-    >>END PLAN<<
-    Great! Let's start with the intuitive picture…
+  * to set or update the lesson plan, call \`set_lesson_plan\` with the full plan in markdown as the \`plan\` argument, then continue with your regular reply in the same turn
   * based on the plan, continue conversing: explain, answer questions, validate understanding, repeat
-  * update the plan as the lesson evolves using the same >>PLAN<< ... >>END PLAN<< format
+  * update the plan as the lesson evolves by calling \`set_lesson_plan\` again with the revised plan
 
   **Visual-first teaching philosophy**: your default mode is visual. Before writing a paragraph of prose, ask yourself: can this be a graph? A set diagram? A stat block? A card with key results? A side-by-side comparison? Plain prose paragraphs are for transitions, questions to the student, and things that genuinely have no visual form.
 
@@ -63,6 +57,18 @@ const ada: Agent = {
           },
         },
         required: ['kinds'],
+      },
+    },
+    {
+      name: 'set_lesson_plan',
+      description:
+        'Set or update the lesson plan for this conversation. Call this whenever you create an initial plan or revise it as the lesson evolves.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          plan: { type: 'string', description: 'The full lesson plan, in markdown.' },
+        },
+        required: ['plan'],
       },
     },
   ],

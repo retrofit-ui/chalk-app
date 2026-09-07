@@ -357,7 +357,7 @@ const App: Component = () => {
                       >
                         <pre class="m-0 p-3 bg-slate-900 text-slate-200 font-mono text-[0.8rem] leading-normal rounded-md overflow-x-auto whitespace-pre-wrap break-words">
                           {(() => {
-                            const raw = m.modifiedFromRawMessage ?? m.content;
+                            const raw = m.content;
                             return typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
                           })()}
                         </pre>

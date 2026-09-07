@@ -10,10 +10,16 @@ import {
   type TextBlock,
   type ToolUseBlock,
 } from './anthropic';
-import { deriveTitle, extractPlanBlock, type Conversation } from './conversations';
+import { deriveTitle, type Conversation } from './conversations';
 import type { Agent } from './agents/types';
 
 export const MAX_TOOL_ROUNDS = 4;
+
+// Handled directly here (not delegated to agent.executeSkill) because setting the plan is a
+// side effect on conversation state, which executeSkill — a stateless string-in/string-out
+// function — has no access to. Any agent that wants plan support declares this in its own
+// `skills` array (see agents/ada, agents/bernoulli); the execution is agent-agnostic.
+const SET_LESSON_PLAN_TOOL = 'set_lesson_plan';
 
 export type SendMessageDeps = {
   apiKey: string;
@@ -156,26 +162,31 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
           toolUseData: { calls: toolUseBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })) },
         });
 
-        const resultBlocks = toolUseBlocks.map((b) => ({
-          type: 'tool_result' as const,
-          tool_use_id: b.id,
-          content: agent.executeSkill?.(b.name, b.input) ?? `Unknown tool: ${b.name}`,
-        }));
+        const resultBlocks = toolUseBlocks.map((b) => {
+          if (b.name === SET_LESSON_PLAN_TOOL) {
+            const plan = (b.input as { plan?: unknown } | undefined)?.plan;
+            if (typeof plan !== 'string' || !plan.trim()) {
+              return {
+                type: 'tool_result' as const,
+                tool_use_id: b.id,
+                content: 'Invalid input: "plan" must be a non-empty string.',
+              };
+            }
+            setConv('plans', produce((ps: string[]) => { ps.push(plan); }));
+            return { type: 'tool_result' as const, tool_use_id: b.id, content: 'Plan saved.' };
+          }
+          return {
+            type: 'tool_result' as const,
+            tool_use_id: b.id,
+            content: agent.executeSkill?.(b.name, b.input) ?? `Unknown tool: ${b.name}`,
+          };
+        });
 
         setConv('messages', produce((m: ChatMessage[]) => {
           m.push({ id: crypto.randomUUID(), role: 'user', content: resultBlocks, kind: 'tool-result' });
         }));
 
         continue;
-      }
-
-      // Terminal turn — check for >>PLAN<< block after streaming completes
-      const rawContent = getConv().messages[assistantIdx].content;
-      const { plan, reply } = extractPlanBlock(rawContent as string);
-      if (plan !== null) {
-        setConv('messages', assistantIdx, 'modifiedFromRawMessage', rawContent as string);
-        setConv('messages', assistantIdx, 'content', reply);
-        setConv('plans', produce((ps: string[]) => { ps.push(plan); }));
       }
 
       setConv('updatedAt', Date.now());

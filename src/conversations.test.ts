@@ -22,7 +22,6 @@ const {
   forkConversation,
   revertConversation,
   getChildMap,
-  extractPlanBlock,
   deriveTitle,
   upsertConversation,
   getAllConversations,
@@ -147,34 +146,6 @@ describe('getChildMap', () => {
   });
 });
 
-describe('extractPlanBlock', () => {
-  it('returns null plan when no >>PLAN<< marker', () => {
-    const result = extractPlanBlock('just a normal reply');
-    expect(result.plan).toBeNull();
-    expect(result.reply).toBe('just a normal reply');
-  });
-
-  it('extracts plan and reply when both present', () => {
-    const content = '>>PLAN<<\n# Goals\n- learn math\n>>END PLAN<<\n\nHere is your lesson!';
-    const result = extractPlanBlock(content);
-    expect(result.plan).toBe('# Goals\n- learn math');
-    expect(result.reply).toBe('Here is your lesson!');
-  });
-
-  it('handles plan with no following reply', () => {
-    const content = '>>PLAN<<\n# Plan content\n>>END PLAN<<';
-    const result = extractPlanBlock(content);
-    expect(result.plan).toBe('# Plan content');
-    expect(result.reply).toBe('');
-  });
-
-  it('handles >>PLAN<< with no >>END PLAN<< terminator', () => {
-    const content = 'preamble\n>>PLAN<<\n# Plan without end';
-    const result = extractPlanBlock(content);
-    expect(result.plan).toBe('# Plan without end');
-    expect(result.reply).toBe('preamble');
-  });
-});
 
 describe('deriveTitle', () => {
   it('returns "New conversation" when no messages', () => {

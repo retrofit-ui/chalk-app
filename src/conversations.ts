@@ -123,26 +123,6 @@ export function getChildMap(convs: Conversation[]): Map<string, Conversation[]> 
   return map;
 }
 
-const PLAN_START = '>>PLAN<<';
-const PLAN_END = '>>END PLAN<<';
-
-export function extractPlanBlock(content: string): { plan: string | null; reply: string } {
-  const startIdx = content.indexOf(PLAN_START);
-  if (startIdx === -1) return { plan: null, reply: content };
-
-  const afterStart = content.slice(startIdx + PLAN_START.length);
-  const endIdx = afterStart.indexOf(PLAN_END);
-
-  if (endIdx === -1) {
-    // No terminator — treat everything after >>PLAN<< as the plan
-    return { plan: afterStart.trim(), reply: content.slice(0, startIdx).trim() };
-  }
-
-  const plan = afterStart.slice(0, endIdx).trim();
-  const reply = (content.slice(0, startIdx) + afterStart.slice(endIdx + PLAN_END.length)).trim();
-  return { plan, reply };
-}
-
 export function deriveTitle(messages: ChatMessage[]): string {
   const first = messages.find((m) => m.role === 'user');
   if (!first) return 'New conversation';

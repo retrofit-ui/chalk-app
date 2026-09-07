@@ -84,7 +84,6 @@ export type ChatMessage = {
   answerData?: { answers: Record<string, string> };
   toolUseData?: { calls: Array<{ id: string; name: string; input: unknown }> };
   model?: string;
-  modifiedFromRawMessage?: string;
   stopReason?: string;
   debug?: Record<string, unknown>;
 };
