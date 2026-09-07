@@ -1,6 +1,21 @@
-export type AdaSkillKind = 'chalk-graph' | 'chalk-draw' | 'chalk-sets' | 'layout';
+export type AdaSkillKind =
+  | 'chalk-graph'
+  | 'chalk-draw'
+  | 'chalk-sets'
+  | 'chalk-graph3d'
+  | 'chalk-vectors'
+  | 'chalk-matrix'
+  | 'layout';
 
-export const SKILL_KINDS: AdaSkillKind[] = ['chalk-graph', 'chalk-draw', 'chalk-sets', 'layout'];
+export const SKILL_KINDS: AdaSkillKind[] = [
+  'chalk-graph',
+  'chalk-draw',
+  'chalk-sets',
+  'chalk-graph3d',
+  'chalk-vectors',
+  'chalk-matrix',
+  'layout',
+];
 
 export const SKILL_DOCS: Record<AdaSkillKind, string> = {
   'chalk-graph': `## chalk-graph
@@ -47,7 +62,29 @@ Graph rules:
 - Continue your explanation in markdown after the graph block
 - The \`chalk-spec\` block must be valid JSON (no trailing commas, no comments)
 
-**Interactive graphs**: You can ask the student to click on a region of the graph to check their understanding. Add \`"interactive": true\` to the chalk-spec to enable this. Clicks accumulate and are submitted together, so you can ask for multiple points at once (e.g., "mark all three roots"). When the student submits, you will receive all clicked points — validate their answers and give feedback. Example usage: identify a root, a maximum, an inflection point, or where two curves intersect. Only set interactive on one graph at a time.`,
+**Interactive graphs**: You can ask the student to click on a region of the graph to check their understanding. Add \`"interactive": true\` to the chalk-spec to enable this. Clicks accumulate and are submitted together, so you can ask for multiple points at once (e.g., "mark all three roots"). When the student submits, you will receive all clicked points — validate their answers and give feedback. Example usage: identify a root, a maximum, an inflection point, or where two curves intersect. Only set interactive on one graph at a time.
+
+**Slider-driven parameters**: You can add a continuous parameter the student drags with a slider, e.g. to show how Ridge regression shrinks as λ grows. Add a \`params\` array; each param's \`name\` becomes a variable usable inside any curve's \`fn\`:
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-graph",
+  "graphType": "cartesian",
+  "curves": [{ "fn": "x^2 + lambda", "label": "x² + λ" }],
+  "params": [
+    { "name": "lambda", "min": 0, "max": 10, "default": 0, "step": 0.1, "label": "λ" }
+  ],
+  "xDomain": [-4, 4],
+  "yDomain": [-2, 20],
+  "title": "Shifting the parabola with λ"
+}
+\`\`\`
+
+- A param's \`name\` must be a valid identifier and can appear anywhere in a curve's \`fn\` expression (mathjs scope variable).
+- \`min\`/\`max\`/\`default\` are required; \`step\` defaults to \`(max-min)/100\`; \`label\` defaults to \`name\` and is shown next to the slider.
+- You may declare multiple params, each referenced independently across one or more curves.
+- \`params\` and \`interactive\` (click-to-mark) are independent — a graph can use either, both, or neither.
+- Labelled \`points\` do not currently react to \`params\` — their coordinates are fixed numbers, not expressions.`,
 
   'chalk-draw': `## chalk-draw
 
@@ -114,6 +151,74 @@ Sets rules:
 - Hover highlighting is handled automatically; you do not control it
 - \`size\`: "small", "medium" (default), or "large"
 - Use for: set theory (∪ ∩ ᶜ), Bayes, law of total probability, sigma-algebras — not for function graphs`,
+
+  'chalk-graph3d': `## chalk-graph3d
+
+**3D scenes**: For linear algebra in R³ — planes (e.g. col(X)), points, and vectors, with a camera the student can drag to rotate. Emit a \`chalk-graph3d\` spec:
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-graph3d",
+  "title": "Projecting y onto col(X)",
+  "planes": [
+    { "point": [0, 0, 0], "basis1": [1, 0, 0], "basis2": [0, 1, 0], "label": "col(X)", "extent": 3 }
+  ],
+  "points": [
+    { "id": "y", "position": [1, 1.5, 2], "label": "y", "draggable": true }
+  ]
+}
+\`\`\`
+
+- \`planes[].point\`/\`basis1\`/\`basis2\` define a plane through \`point\`, spanned by the two basis vectors (they need not be unit length or orthogonal — the renderer orthonormalizes them).
+- **Auto-projection**: if \`points\` has exactly one point with \`"draggable": true\` and you do NOT supply \`vectors\`, the renderer automatically computes and draws the orthogonal projection ŷ onto the first plane, plus the residual vector e = y − ŷ, live as the student drags the point. This is the primary way to teach OLS projection — just declare the plane and the point, do not try to compute ŷ/e yourself.
+- If you need vectors that aren't the auto-derived projection (e.g. showing arbitrary basis vectors or a fixed decomposition), supply an explicit \`vectors\` array of \`{ from, to, label?, style?: "solid"|"dashed" }\` — this disables auto-projection.
+- \`showAxes\`: defaults to true; set false to hide the R³ axis gizmo for a cleaner shot.
+- The student can drag to rotate the camera at any time; dragging the point marked \`draggable\` moves it and live-updates the projection.
+- Use for: column space / row space, orthogonal projection, residuals, basis and span in R³ — not for 2D functions (\`chalk-graph\`) or flat set diagrams (\`chalk-sets\`).`,
+
+  'chalk-vectors': `## chalk-vectors
+
+**Vector decomposition diagrams**: For showing a vector sum like y = ŷ + e as composed arrows. Emit a \`chalk-vectors\` spec:
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-vectors",
+  "title": "y = ŷ + e",
+  "compose": "head-to-tail",
+  "vectors": [
+    { "id": "yhat", "x": 3, "y": 1, "label": "ŷ", "colorIndex": 0 },
+    { "id": "e", "x": 0.5, "y": 1.5, "label": "e", "colorIndex": 1 }
+  ],
+  "xDomain": [-1, 5],
+  "yDomain": [-1, 4]
+}
+\`\`\`
+
+- \`compose: "head-to-tail"\` (as above) chains each vector from the tip of the previous one — the final tip lands at the sum of all vectors, which is exactly right for decompositions like y = ŷ + e.
+- \`compose: "origin"\` (default) draws every vector from (0,0) instead — better for comparing several vectors' magnitude/direction directly (e.g. showing y, ŷ, and e all relative to the same origin).
+- Add enough \`xDomain\`/\`yDomain\` padding that every arrow tip and label sits comfortably inside the viewport (defaults to \`[-5, 5]\` on both axes if omitted).
+- Use for: vector addition/subtraction, decomposition (y = ŷ + e), basis combinations in 2D — not for 3D scenes (\`chalk-graph3d\`) or function curves (\`chalk-graph\`).`,
+
+  'chalk-matrix': `## chalk-matrix
+
+**Matrix heatmaps**: For visualizing a matrix's structure by coloring cells by value — e.g. XᵀX, how adding λI shifts it, or diagonal dominance. Emit a \`chalk-matrix\` spec:
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-matrix",
+  "title": "XᵀX + λI (λ = 2)",
+  "values": [[7, 2, 0], [2, 9, 1], [0, 1, 6]],
+  "rowLabels": ["x₁", "x₂", "x₃"],
+  "colLabels": ["x₁", "x₂", "x₃"],
+  "highlightDiagonal": true
+}
+\`\`\`
+
+- \`values\` is a rectangular array of numbers (rows of equal length).
+- \`colorScale\`: omit to auto-detect — "diverging" (blue↔white↔red, zero always white) if values cross zero, else "sequential" (white→blue). Set explicitly to override.
+- \`highlightDiagonal\`: outlines the \`row === col\` cells — use when calling out what λI adds, or diagonal dominance.
+- \`precision\`: decimal places shown per cell, default 2.
+- Use for: XᵀX / Gram matrix structure, regularization (λI), covariance/correlation matrices, diagonal dominance and eigenvalue-adjacent structure — not for plain tables of unrelated numbers (use \`grid\`/\`text\` layout instead).`,
 
   layout: `## layout
 

@@ -2,10 +2,21 @@ import { type Component, createContext, For, Match, Show, Switch, useContext } f
 import { createStore } from 'solid-js/store';
 import { SpecRenderer } from '@retrofit-ui/spa-solid-shoelace/components';
 import type { RootSpec } from '@retrofit-ui/core';
-import type { ChalkViewSpec, ChalkGraphSpec, ChalkDrawSpec, ChalkSetsSpec } from './spec';
+import type {
+  ChalkViewSpec,
+  ChalkGraphSpec,
+  ChalkDrawSpec,
+  ChalkSetsSpec,
+  ChalkGraph3DSpec,
+  ChalkVectorsSpec,
+  ChalkMatrixSpec,
+} from './spec';
 import CartesianGraph from './CartesianGraph';
 import DrawCanvas from './DrawCanvas';
 import SetsRenderer from './SetsRenderer';
+import Scene3D from './Scene3D';
+import VectorDiagram from './VectorDiagram';
+import MatrixHeatmap from './MatrixHeatmap';
 
 type ViewNodeProps = {
   spec: { kind: string } & Record<string, unknown>;
@@ -43,6 +54,15 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
       </Match>
       <Match when={props.spec.kind === 'chalk-sets'}>
         <SetsRenderer spec={props.spec as unknown as ChalkSetsSpec} />
+      </Match>
+      <Match when={props.spec.kind === 'chalk-graph3d'}>
+        <Scene3D spec={props.spec as unknown as ChalkGraph3DSpec} />
+      </Match>
+      <Match when={props.spec.kind === 'chalk-vectors'}>
+        <VectorDiagram spec={props.spec as unknown as ChalkVectorsSpec} />
+      </Match>
+      <Match when={props.spec.kind === 'chalk-matrix'}>
+        <MatrixHeatmap spec={props.spec as unknown as ChalkMatrixSpec} />
       </Match>
       <Match when={props.spec.kind === 'flex'}>
         <div

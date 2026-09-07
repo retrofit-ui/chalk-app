@@ -1,14 +1,6 @@
 import { type Component, createSignal, For, Show } from 'solid-js';
 import type { ChalkSetsSpec } from './spec';
-
-const PALETTE = [
-  '#2563eb', '#dc2626', '#16a34a', '#9333ea',
-  '#ea580c', '#0891b2', '#be185d', '#65a30d',
-  '#7c3aed', '#0f766e', '#d97706', '#4f46e5',
-  '#059669', '#e11d48', '#0284c7', '#c026d3',
-];
-
-const color = (i: number) => PALETTE[i % PALETTE.length];
+import { color } from './palette';
 
 // ViewBox: 560 × 380. Inner drawing area: 540 × 360 with 10px margin.
 const MARGIN = 10;

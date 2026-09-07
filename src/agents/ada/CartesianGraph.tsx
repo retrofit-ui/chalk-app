@@ -1,6 +1,7 @@
-import { type Component, createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { type Component, createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import functionPlot from 'function-plot';
-import type { ChalkGraphSpec } from './spec';
+import type { ChalkGraphParam, ChalkGraphSpec } from './spec';
+import { color } from './palette';
 import './CartesianGraph.css';
 
 const FALLBACK_HEIGHT = 300;
@@ -8,28 +9,6 @@ const MAX_HEIGHT = 480;
 const MIN_HEIGHT = 200;
 
 const SIZE_MAX_WIDTH: Record<string, number> = { small: 320, medium: 640, large: 900 };
-
-// 16-color light-mode palette — Tailwind 600 level, chosen for contrast on white
-const PALETTE = [
-  '#2563eb', // blue
-  '#dc2626', // red
-  '#16a34a', // green
-  '#9333ea', // purple
-  '#ea580c', // orange
-  '#0891b2', // cyan
-  '#be185d', // pink
-  '#65a30d', // lime
-  '#7c3aed', // violet
-  '#0f766e', // teal
-  '#d97706', // amber
-  '#4f46e5', // indigo
-  '#059669', // emerald
-  '#e11d48', // rose
-  '#0284c7', // sky
-  '#c026d3', // fuchsia
-];
-
-const color = (index: number) => PALETTE[index % PALETTE.length];
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -41,9 +20,14 @@ const CartesianGraph: Component<{
   let currentWidth = 0;
   let clickCleanup: (() => void) | null = null;
   const [pendingClicks, setPendingClicks] = createSignal<Array<{ x: number; y: number }>>([]);
+  const [paramValues, setParamValues] = createSignal<Record<string, number>>(
+    Object.fromEntries((props.spec.params ?? []).map((p) => [p.name, p.default])),
+  );
 
   const draw = (w: number) => {
     if (!w) return;
+    // Reading paramValues() here makes this draw() reactive to slider changes
+    const scope = paramValues();
     w = Math.min(w, SIZE_MAX_WIDTH[props.spec.size ?? 'medium']);
     currentWidth = w;
     const h = Math.min(
@@ -84,6 +68,7 @@ const CartesianGraph: Component<{
           fn: c.fn,
           graphType: 'polyline' as const,
           color: color(i),
+          scope,
         })),
         ...pointData,
         ...clickMarkers,
@@ -163,6 +148,26 @@ const CartesianGraph: Component<{
               Submit
             </button>
           </Show>
+        </div>
+      </Show>
+      <Show when={props.spec.params && props.spec.params.length > 0}>
+        <div class="flex flex-col gap-1.5 mt-2">
+          <For each={props.spec.params}>
+            {(p: ChalkGraphParam) => (
+              <div class="flex items-center gap-2 text-xs text-slate-600">
+                <label class="font-mono min-w-16">{p.label ?? p.name} = {paramValues()[p.name].toFixed(2)}</label>
+                <input
+                  type="range"
+                  min={p.min}
+                  max={p.max}
+                  step={p.step ?? (p.max - p.min) / 100}
+                  value={paramValues()[p.name]}
+                  class="flex-1 accent-blue-600"
+                  onInput={(e) => setParamValues((prev) => ({ ...prev, [p.name]: Number(e.currentTarget.value) }))}
+                />
+              </div>
+            )}
+          </For>
         </div>
       </Show>
     </div>
