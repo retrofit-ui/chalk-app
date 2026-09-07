@@ -1,8 +1,5 @@
-// @vitest-environment jsdom
-// Importing from ./harness pulls in ChalkSpecRenderer -> @solidjs/router, which touches
-// `window` at module load time — the default node test environment has no `window`.
 import { describe, it, expect } from 'vitest';
-import { findPreviousAnswers, parseChunks } from './harness';
+import { findPreviousAnswers, parseChunks } from './chunkParser';
 import type { ChatMessage } from '../../anthropic';
 
 function fence(spec: unknown): string {
