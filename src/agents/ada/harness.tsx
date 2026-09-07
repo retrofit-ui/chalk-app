@@ -19,7 +19,7 @@ export function findPreviousAnswers(
 const CHALK_SPEC_FENCE = /```chalk-spec\n([\s\S]*?)\n```/g;
 const CHALK_SPEC_OPENER = '```chalk-spec';
 
-function parseChunks(content: string): ChalkViewSpec[] {
+export function parseChunks(content: string): ChalkViewSpec[] {
   const chunks: ChalkViewSpec[] = [];
   let lastIndex = 0;
 
