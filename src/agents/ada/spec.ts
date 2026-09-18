@@ -176,6 +176,32 @@ export type ChalkMatmulSpec = {
   size?: 'small' | 'medium' | 'large';
 };
 
+export type ComputeGraphNode = {
+  id: string;
+  label: string; // short name/symbol shown in the box, e.g. "r₁", "w₁", "matmul", "ReLU"
+  formula?: string; // optional LaTeX shown under the label, e.g. "w_1 = r_1^2 + r_2"
+  shape?: string[]; // optional tensor shape tag, e.g. ["n", "784"] — rendered as a small caption
+  layer: number; // 0-indexed position along the flow direction (column if row-direction, row if column-direction)
+  slot: number; // 0-indexed position within that layer (lets parallel/branching nodes sit side by side)
+  colorIndex?: number;
+  style?: 'box' | 'circle'; // default 'box'
+};
+
+export type ComputeGraphEdge = {
+  from: string; // node id
+  to: string; // node id
+  label?: string; // optional LaTeX or plain text, e.g. a local derivative or a shape annotation
+};
+
+export type ChalkComputeGraphSpec = {
+  kind: 'chalk-compute-graph';
+  title?: string;
+  direction?: 'row' | 'column'; // default 'row' — overall flow direction of increasing `layer`
+  nodes: ComputeGraphNode[];
+  edges: ComputeGraphEdge[];
+  size?: 'small' | 'medium' | 'large';
+};
+
 // Chunks in a Chalk message are either a top-level retrofit spec or a chalk-specific spec.
 // Using RootSpec (not ViewSpec) because chunks are rendered via SpecRenderer which accepts RootSpec.
 export type ChalkViewSpec =
@@ -187,4 +213,5 @@ export type ChalkViewSpec =
   | ChalkGraph3DSpec
   | ChalkVectorsSpec
   | ChalkMatrixSpec
-  | ChalkMatmulSpec;
+  | ChalkMatmulSpec
+  | ChalkComputeGraphSpec;

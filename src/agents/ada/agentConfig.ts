@@ -32,6 +32,7 @@ export const adaConfig: Omit<Agent, 'Harness'> = {
   - \`chalk-vectors\` — 2D vector decomposition diagrams (e.g. y = ŷ + e)
   - \`chalk-matrix\` — colored matrix/grid visualizations (XᵀX structure, λI shifts, diagonal dominance)
   - \`chalk-matmul\` — interactive matrix multiplication AB, hover/tap a result cell to see the contributing row/column and dot-product arithmetic (chain rule, composition of linear maps)
+  - \`chalk-compute-graph\` — node/edge diagrams for tensor shape-flow pipelines or chain-rule/dependency graphs, with agent-declared \`(layer, slot)\` positions; hover/tap a node to highlight its full ancestor/descendant chain
   - layout composition (\`flex\`, \`grid\`, \`card\`, \`text\`, \`stat\`, \`answerbox\`) — side-by-side comparisons, callouts, fill-in-the-blank
 
   **Before using a kind for the first time in this conversation**, call \`get_spec_docs\` with the kind(s) you need — it returns the exact JSON shape, rules, and worked examples. Batch everything you'll need into one call (e.g. \`["chalk-graph", "layout"]\`) rather than calling repeatedly. Once fetched, a kind's docs stay in this conversation — don't call \`get_spec_docs\` again for a kind you've already used here.

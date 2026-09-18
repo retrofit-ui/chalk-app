@@ -6,6 +6,7 @@ export type AdaSkillKind =
   | 'chalk-vectors'
   | 'chalk-matrix'
   | 'chalk-matmul'
+  | 'chalk-compute-graph'
   | 'layout';
 
 export const SKILL_KINDS: AdaSkillKind[] = [
@@ -16,6 +17,7 @@ export const SKILL_KINDS: AdaSkillKind[] = [
   'chalk-vectors',
   'chalk-matrix',
   'chalk-matmul',
+  'chalk-compute-graph',
   'layout',
 ];
 
@@ -275,6 +277,62 @@ Sets rules:
 - \`precision\`: decimal places shown per cell, shared across A, B, and the result — default 2.
 - Works best up to roughly 4×4; larger matrices get visually cramped across three side-by-side grids.
 - Use \`chalk-matmul\` specifically for teaching **how a product AB is computed** (chain rule, composition of linear maps). Use plain \`chalk-matrix\` instead for single-matrix structure (Gram matrices, regularization, covariance) — \`chalk-matrix\` has no second operand and no multiplication semantics.`,
+
+  'chalk-compute-graph': `## chalk-compute-graph
+
+**Node/edge diagrams**: a generic graph for two related use cases — tensor **shape-flow** pipelines (nodes are operations, edges carry shape labels) and **chain-rule / dependency graphs** (nodes are variables with a formula, edges carry local-derivative labels). Emit a \`chalk-compute-graph\` spec:
+
+Shape-flow example (linear chain — every node in its own layer, slot 0):
+\`\`\`chalk-spec
+{
+  "kind": "chalk-compute-graph",
+  "title": "One linear layer, forward pass",
+  "direction": "row",
+  "nodes": [
+    { "id": "x", "label": "x", "shape": ["n", "784"], "layer": 0, "slot": 0 },
+    { "id": "matmul", "label": "matmul", "layer": 1, "slot": 0 },
+    { "id": "bias", "label": "+ bias", "layer": 2, "slot": 0 },
+    { "id": "relu", "label": "ReLU", "layer": 3, "slot": 0 },
+    { "id": "h", "label": "h", "shape": ["n", "128"], "layer": 4, "slot": 0 }
+  ],
+  "edges": [
+    { "from": "x", "to": "matmul" },
+    { "from": "matmul", "to": "bias", "label": "W: (784, 128)" },
+    { "from": "bias", "to": "relu", "label": "b: (128,)" },
+    { "from": "relu", "to": "h" }
+  ]
+}
+\`\`\`
+
+Chain-rule example (small branch — z depends on both y1 and y2, which both depend on x):
+\`\`\`chalk-spec
+{
+  "kind": "chalk-compute-graph",
+  "title": "Chain rule with a shared input",
+  "nodes": [
+    { "id": "x", "label": "x", "layer": 0, "slot": 0, "style": "circle" },
+    { "id": "y1", "label": "y₁", "formula": "y_1 = x^2", "layer": 1, "slot": 0 },
+    { "id": "y2", "label": "y₂", "formula": "y_2 = \\\\sin(x)", "layer": 1, "slot": 1 },
+    { "id": "z", "label": "z", "formula": "z = y_1 + y_2", "layer": 2, "slot": 0 }
+  ],
+  "edges": [
+    { "from": "x", "to": "y1", "label": "\\\\partial y_1/\\\\partial x = 2x" },
+    { "from": "x", "to": "y2", "label": "\\\\partial y_2/\\\\partial x = \\\\cos x" },
+    { "from": "y1", "to": "z", "label": "\\\\partial z/\\\\partial y_1 = 1" },
+    { "from": "y2", "to": "z", "label": "\\\\partial z/\\\\partial y_2 = 1" }
+  ]
+}
+\`\`\`
+
+Compute-graph rules:
+- \`layer\`/\`slot\` are the ONLY layout controls — there is no auto-layout. Lay nodes out deliberately: increasing \`layer\` in the flow direction, and give anything that should sit side by side (branches, parallel paths) distinct \`slot\` values within the same layer.
+- \`direction\`: "row" (default) maps \`layer\` to columns, left to right; "column" maps \`layer\` to rows, top to bottom.
+- Each node needs a short \`label\`; add \`formula\` (bare LaTeX, no \`$\`/\`$$\` delimiters needed) for a variable's defining equation, or \`shape\` (array of dimension names/sizes) for a tensor shape caption — use whichever fits the use case, not both.
+- \`style: "circle"\` is a small visual variant for leaf/input variables; default is \`"box"\`.
+- Edge \`label\` is optional bare LaTeX or plain text (e.g. a local derivative, or a weight-matrix shape note).
+- **Hovering (or tapping, on touch) any node highlights its full causal history** — every ancestor reachable by following edges backward — in one accent color, and **everything it affects** — every descendant reachable forward — in a second accent color; unrelated nodes/edges dim. This is automatic — you do not control or narrate it.
+- Keep graphs small (roughly 10-12 nodes) — layout is fully manual, so legibility drops fast beyond that.
+- Use for: tensor shape-flow pipelines (matmul → bias → activation, etc.) AND chain-rule/dependency graphs showing how one quantity's change propagates through others. Do NOT use for set relationships (\`chalk-sets\`) or concrete numeric matrix values (\`chalk-matrix\`/\`chalk-matmul\`) — this kind is for structure and dependency, not for displaying actual numbers.`,
 
   layout: `## layout
 
