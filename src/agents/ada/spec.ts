@@ -139,6 +139,13 @@ export type ChalkVectorsSpec = {
   size?: 'small' | 'medium' | 'large';
 };
 
+export type ChalkMatrixCellNote = {
+  row: number;
+  col: number;
+  formula: string;
+  note?: string;
+};
+
 export type ChalkMatrixSpec = {
   kind: 'chalk-matrix';
   title?: string;
@@ -149,6 +156,9 @@ export type ChalkMatrixSpec = {
   highlightDiagonal?: boolean;
   precision?: number;
   size?: 'small' | 'medium' | 'large';
+  cellNotes?: ChalkMatrixCellNote[];
+  outputVar?: string;
+  inputVar?: string;
 };
 
 // Chunks in a Chalk message are either a top-level retrofit spec or a chalk-specific spec.

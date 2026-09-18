@@ -218,7 +218,32 @@ Sets rules:
 - \`colorScale\`: omit to auto-detect — "diverging" (blue↔white↔red, zero always white) if values cross zero, else "sequential" (white→blue). Set explicitly to override.
 - \`highlightDiagonal\`: outlines the \`row === col\` cells — use when calling out what λI adds, or diagonal dominance.
 - \`precision\`: decimal places shown per cell, default 2.
-- Use for: XᵀX / Gram matrix structure, regularization (λI), covariance/correlation matrices, diagonal dominance and eigenvalue-adjacent structure — not for plain tables of unrelated numbers (use \`grid\`/\`text\` layout instead).`,
+- Use for: XᵀX / Gram matrix structure, regularization (λI), covariance/correlation matrices, diagonal dominance and eigenvalue-adjacent structure — not for plain tables of unrelated numbers (use \`grid\`/\`text\` layout instead).
+
+**Hover-reveal formulas for Jacobians**: add \`cellNotes\` (plus optionally \`outputVar\`/\`inputVar\`) when a matrix is a Jacobian and you want the student to inspect individual partial derivatives by hovering (or tapping, on touch) a cell:
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-matrix",
+  "title": "Jacobian of w = f(r) at r = (2, 3)",
+  "values": [[4, 1], [3, 2]],
+  "rowLabels": ["w₁ = r₁² + r₂", "w₂ = r₁ r₂"],
+  "colLabels": ["r₁", "r₂"],
+  "outputVar": "w",
+  "inputVar": "r",
+  "cellNotes": [
+    { "row": 0, "col": 0, "formula": "\\\\dfrac{\\\\partial w_1}{\\\\partial r_1} = 2r_1 = 4", "note": "w₁ grows quadratically in r₁" },
+    { "row": 0, "col": 1, "formula": "\\\\dfrac{\\\\partial w_1}{\\\\partial r_2} = 1", "note": "r₂ enters w₁ additively — constant sensitivity" },
+    { "row": 1, "col": 0, "formula": "\\\\dfrac{\\\\partial w_2}{\\\\partial r_1} = r_2 = 3", "note": "product rule: holding r₂ fixed" },
+    { "row": 1, "col": 1, "formula": "\\\\dfrac{\\\\partial w_2}{\\\\partial r_2} = r_1 = 2", "note": "product rule: holding r₁ fixed" }
+  ]
+}
+\`\`\`
+
+- \`cellNotes\` is an array of \`{row, col, formula, note?}\`. \`formula\` is bare LaTeX (no \`$$\` delimiters — the renderer adds display-math wrapping itself). \`note\` is an optional short plain-language explanation.
+- \`outputVar\`/\`inputVar\`: short variable names (e.g. \`"w"\`, \`"r"\`) used to render a running header like "∂w / ∂r" above the revealed formula. Supply both or neither — the header is skipped if either is missing.
+- Hovering/tapping a cell that has a matching \`cellNotes\` entry bolds that cell's row and column labels, reinforcing "row = output component, column = input component" for a Jacobian, and shows the formula (plus \`note\`, if given) below the grid. Reveal is independent per cell — there is no step-through order.
+- Omit \`cellNotes\` entirely for a plain matrix heatmap (XᵀX, covariance, regularization) — this feature only activates when you supply it, and is meant for small illustrative Jacobians (roughly up to 3×3/4×4), not large matrices.`,
 
   layout: `## layout
 
