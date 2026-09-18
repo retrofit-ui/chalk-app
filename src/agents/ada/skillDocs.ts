@@ -5,6 +5,7 @@ export type AdaSkillKind =
   | 'chalk-graph3d'
   | 'chalk-vectors'
   | 'chalk-matrix'
+  | 'chalk-matmul'
   | 'layout';
 
 export const SKILL_KINDS: AdaSkillKind[] = [
@@ -14,6 +15,7 @@ export const SKILL_KINDS: AdaSkillKind[] = [
   'chalk-graph3d',
   'chalk-vectors',
   'chalk-matrix',
+  'chalk-matmul',
   'layout',
 ];
 
@@ -244,6 +246,35 @@ Sets rules:
 - \`outputVar\`/\`inputVar\`: short variable names (e.g. \`"w"\`, \`"r"\`) used to render a running header like "∂w / ∂r" above the revealed formula. Supply both or neither — the header is skipped if either is missing.
 - Hovering/tapping a cell that has a matching \`cellNotes\` entry bolds that cell's row and column labels, reinforcing "row = output component, column = input component" for a Jacobian, and shows the formula (plus \`note\`, if given) below the grid. Reveal is independent per cell — there is no step-through order.
 - Omit \`cellNotes\` entirely for a plain matrix heatmap (XᵀX, covariance, regularization) — this feature only activates when you supply it, and is meant for small illustrative Jacobians (roughly up to 3×3/4×4), not large matrices.`,
+
+  'chalk-matmul': `## chalk-matmul
+
+**Interactive matrix multiplication**: For teaching how a product AB is actually computed — e.g. chain-rule Jacobian products (∂z/∂x = (∂z/∂y)(∂y/∂x)), or composing linear maps. Emit a \`chalk-matmul\` spec:
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-matmul",
+  "title": "Chain rule: ∂z/∂x = (∂z/∂y)(∂y/∂x)",
+  "aLabel": "∂z/∂y",
+  "bLabel": "∂y/∂x",
+  "a": [[2, 0], [1, 3]],
+  "b": [[1, 4], [0, 2]],
+  "rowLabelsA": ["z₁", "z₂"],
+  "colLabelsA": ["y₁", "y₂"],
+  "rowLabelsB": ["y₁", "y₂"],
+  "colLabelsB": ["x₁", "x₂"],
+  "precision": 0
+}
+\`\`\`
+
+- The renderer always computes the result AB itself from \`a\` and \`b\` — **never supply a \`result\`/\`c\` field**, it does not exist in the schema and would be ignored. This avoids the failure mode where hand-multiplying matrices in JSON introduces arithmetic mistakes.
+- \`a\`'s column count must equal \`b\`'s row count, or the renderer shows a dimension-mismatch error instead of a diagram — double check shapes before emitting.
+- The student hovers (or taps, on touch) any cell of the result matrix to highlight the contributing row of A and column of B, plus see the dot-product arithmetic spelled out below the grids (e.g. \`2×1 + 3×4 = 14\`). This is automatic — you do not control or narrate it.
+- \`rowLabelsA\`/\`colLabelsA\`/\`rowLabelsB\`/\`colLabelsB\` are optional; omitted labels fall back to numeric indices.
+- \`aLabel\`/\`bLabel\` are short captions shown above each matrix (e.g. a Jacobian's name like "∂y/∂x") — distinct from \`rowLabels\`/\`colLabels\`, which label individual rows/columns.
+- \`precision\`: decimal places shown per cell, shared across A, B, and the result — default 2.
+- Works best up to roughly 4×4; larger matrices get visually cramped across three side-by-side grids.
+- Use \`chalk-matmul\` specifically for teaching **how a product AB is computed** (chain rule, composition of linear maps). Use plain \`chalk-matrix\` instead for single-matrix structure (Gram matrices, regularization, covariance) — \`chalk-matrix\` has no second operand and no multiplication semantics.`,
 
   layout: `## layout
 

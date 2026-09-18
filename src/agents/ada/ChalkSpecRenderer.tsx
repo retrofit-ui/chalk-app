@@ -10,6 +10,7 @@ import type {
   ChalkGraph3DSpec,
   ChalkVectorsSpec,
   ChalkMatrixSpec,
+  ChalkMatmulSpec,
 } from './spec';
 import CartesianGraph from './CartesianGraph';
 import DrawCanvas from './DrawCanvas';
@@ -17,6 +18,7 @@ import SetsRenderer from './SetsRenderer';
 import Scene3D from './Scene3D';
 import VectorDiagram from './VectorDiagram';
 import MatrixHeatmap from './MatrixHeatmap';
+import MatrixMultiplyView from './MatrixMultiplyView';
 
 type ViewNodeProps = {
   spec: { kind: string } & Record<string, unknown>;
@@ -63,6 +65,9 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
       </Match>
       <Match when={props.spec.kind === 'chalk-matrix'}>
         <MatrixHeatmap spec={props.spec as unknown as ChalkMatrixSpec} />
+      </Match>
+      <Match when={props.spec.kind === 'chalk-matmul'}>
+        <MatrixMultiplyView spec={props.spec as unknown as ChalkMatmulSpec} />
       </Match>
       <Match when={props.spec.kind === 'flex'}>
         <div

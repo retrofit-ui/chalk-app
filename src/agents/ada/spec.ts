@@ -161,6 +161,21 @@ export type ChalkMatrixSpec = {
   inputVar?: string;
 };
 
+export type ChalkMatmulSpec = {
+  kind: 'chalk-matmul';
+  title?: string;
+  a: number[][];
+  b: number[][];
+  aLabel?: string;
+  bLabel?: string;
+  rowLabelsA?: string[];
+  colLabelsA?: string[];
+  rowLabelsB?: string[];
+  colLabelsB?: string[];
+  precision?: number;
+  size?: 'small' | 'medium' | 'large';
+};
+
 // Chunks in a Chalk message are either a top-level retrofit spec or a chalk-specific spec.
 // Using RootSpec (not ViewSpec) because chunks are rendered via SpecRenderer which accepts RootSpec.
 export type ChalkViewSpec =
@@ -171,4 +186,5 @@ export type ChalkViewSpec =
   | ChalkAnswerBoxSpec
   | ChalkGraph3DSpec
   | ChalkVectorsSpec
-  | ChalkMatrixSpec;
+  | ChalkMatrixSpec
+  | ChalkMatmulSpec;
