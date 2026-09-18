@@ -111,12 +111,34 @@ export type Chalk3DVector = {
   style?: 'solid' | 'dashed';
 };
 
+export type Chalk3DSurface = {
+  fn: string; // two-variable mathjs expression, e.g. "(x-1)^2 + 2*(y+0.5)^2"
+  label?: string;
+  xDomain?: [number, number]; // default [-3, 3]
+  yDomain?: [number, number]; // default [-3, 3]
+  resolution?: number; // samples per axis, default 40, clamped to 80
+  colorScale?: 'sequential' | 'diverging'; // by z-height, same convention as ChalkMatrixSpec; default sequential
+  opacity?: number; // default 0.85
+  wireframe?: boolean; // default false
+};
+
+export type Chalk3DPath = {
+  id: string;
+  points: Vec3[]; // ordered waypoints, agent-provided (e.g. gradient descent steps) — never computed by the renderer
+  label?: string;
+  colorIndex?: number;
+  showMarkers?: boolean; // default true
+  animate?: boolean; // default false — animate a marker traveling along the path once on mount
+};
+
 export type ChalkGraph3DSpec = {
   kind: 'chalk-graph3d';
   title?: string;
   planes?: Chalk3DPlane[];
   points?: Chalk3DPoint[];
   vectors?: Chalk3DVector[];
+  surfaces?: Chalk3DSurface[];
+  paths?: Chalk3DPath[];
   showAxes?: boolean;
   size?: 'small' | 'medium' | 'large';
 };

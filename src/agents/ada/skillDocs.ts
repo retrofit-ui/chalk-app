@@ -178,7 +178,48 @@ Sets rules:
 - If you need vectors that aren't the auto-derived projection (e.g. showing arbitrary basis vectors or a fixed decomposition), supply an explicit \`vectors\` array of \`{ from, to, label?, style?: "solid"|"dashed" }\` — this disables auto-projection.
 - \`showAxes\`: defaults to true; set false to hide the R³ axis gizmo for a cleaner shot.
 - The student can drag to rotate the camera at any time; dragging the point marked \`draggable\` moves it and live-updates the projection.
-- Use for: column space / row space, orthogonal projection, residuals, basis and span in R³ — not for 2D functions (\`chalk-graph\`) or flat set diagrams (\`chalk-sets\`).`,
+- Use for: column space / row space, orthogonal projection, residuals, basis and span in R³ — not for 2D functions (\`chalk-graph\`) or flat set diagrams (\`chalk-sets\`).
+
+**Surfaces and paths (loss landscapes, gradient descent)**: For visualizing a scalar loss L(w1, w2) as a 3D surface, with the optimizer's trajectory drawn as a path across it:
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-graph3d",
+  "title": "Gradient descent on a quadratic loss bowl",
+  "surfaces": [
+    {
+      "fn": "(x - 1)^2 + 2*(y + 0.5)^2",
+      "label": "L(w1, w2)",
+      "xDomain": [-3, 3],
+      "yDomain": [-3, 3],
+      "resolution": 40,
+      "colorScale": "sequential",
+      "opacity": 0.85
+    }
+  ],
+  "paths": [
+    {
+      "id": "descent",
+      "points": [[-2, 2, 21.5], [-1.4, 1.0, 10.26], [-0.92, 0.4, 5.31], [-0.536, 0.04, 2.94], [-0.229, -0.176, 1.72]],
+      "colorIndex": 1,
+      "showMarkers": true
+    }
+  ],
+  "points": [
+    { "id": "start", "position": [-2, 2, 21.5], "label": "start", "colorIndex": 1 },
+    { "id": "min", "position": [1, -0.5, 0], "label": "minimum", "colorIndex": 2 }
+  ]
+}
+\`\`\`
+
+- \`surfaces[].fn\` uses the **same mathjs-expression syntax as \`chalk-graph\`'s \`fn\`** (x^2, sin(x), exp(x), sqrt(x), etc.), but here it is genuinely evaluated by mathjs (not \`function-plot\`, which only handles single-variable curves) as a function of **both** \`x\` and \`y\` — e.g. \`"(x-1)^2 + 2*(y+0.5)^2"\`.
+- \`xDomain\`/\`yDomain\` default to \`[-3, 3]\`; \`resolution\` (samples per axis) defaults to 40 and is capped at 80 — keep it at the default unless you have a real reason to raise it, since higher values cost real render time.
+- \`colorScale\`: use \`"sequential"\` (the default) for surfaces that are always non-negative, like a typical loss bowl; use \`"diverging"\` for surfaces that cross zero (e.g. a saddle point), same convention as \`chalk-matrix\`.
+- \`wireframe: true\` renders only the grid lines with no filled surface — useful when a path or point would otherwise be hidden inside/behind the mesh.
+- \`paths[].points\` is an ordered list of \`[x, y, z]\` waypoints that **you must compute and provide** — the renderer only draws the polyline and marker spheres you give it; it never runs gradient descent (or any other iterative solve) itself. Compute the trajectory yourself (e.g. a few steps of gradient descent on the same \`fn\`) and pass the resulting points.
+- \`paths[].showMarkers\` (default true) draws a small sphere at each waypoint; \`paths[].animate: true\` additionally animates a marker traveling once along the path when it first renders — good for narrating "watch it descend," but the path itself is always fully visible regardless of \`animate\`.
+- Combine with regular \`points\`/\`vectors\` as usual — e.g. marking the start and the minimum, as in the example above.
+- Use for: loss landscapes, gradient descent / optimization trajectories, visualizing a two-variable function's shape — not for single-variable curves (\`chalk-graph\`) or abstract vector decomposition (\`chalk-vectors\`).`,
 
   'chalk-vectors': `## chalk-vectors
 

@@ -4,6 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { Chalk3DPlane, Chalk3DPoint, Chalk3DVector, ChalkGraph3DSpec, Vec3 } from './spec';
 import { color } from './palette';
+import { cellRgb } from './colorScale';
+import { clampResolution, sampleSurface } from './surfaceSampler';
 
 const SIZE_MAX_WIDTH: Record<string, number> = { small: 320, medium: 560, large: 820 };
 const ASPECT = 3 / 4; // height = width * ASPECT
@@ -52,6 +54,19 @@ const makeLabel = (text: string, colorHex = '#334155') => {
   return new CSS2DObject(div);
 };
 
+// A traveling marker animation for a `Chalk3DPath` with `animate: true`. Driven from inside the
+// existing tick() RAF loop via plain closure state (NOT a Solid signal) — a signal here would
+// retrigger the content-rebuild effect on every animation frame, which is exactly the perf trap
+// this file is designed to avoid for surfaces (see the static/dynamic effect split below).
+type PathAnimation = {
+  mesh: THREE.Object3D;
+  points: THREE.Vector3[];
+  startTime: number;
+  durationMs: number;
+};
+
+const PATH_ANIMATION_DURATION_MS = 2500;
+
 const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
   let el!: HTMLDivElement;
   let scene!: THREE.Scene;
@@ -60,6 +75,12 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
   let labelRenderer!: CSS2DRenderer;
   let controls!: OrbitControls;
   let contentGroup!: THREE.Group;
+  // Static content (planes, surfaces, paths, axes) lives in its own subgroup, rebuilt only when
+  // the spec's static fields change. Dynamic content (points/vectors/auto-projection) lives in a
+  // separate subgroup, rebuilt on every drag frame. Splitting these means dragging a point never
+  // re-touches (and, critically, never re-samples) the surface mesh.
+  let staticGroup!: THREE.Group;
+  let dynamicGroup!: THREE.Group;
   let rafId = 0;
   let currentWidth = 0;
 
@@ -69,8 +90,11 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
   const dragPlane = new THREE.Plane();
   const dragIntersect = new THREE.Vector3();
 
-  let frameDisposables: Disposable[] = [];
-  let frameLabels: CSS2DObject[] = [];
+  let staticDisposables: Disposable[] = [];
+  let staticLabels: CSS2DObject[] = [];
+  let dynamicDisposables: Disposable[] = [];
+  let dynamicLabels: CSS2DObject[] = [];
+  let activeAnimations: PathAnimation[] = [];
 
   const [dragPos, setDragPos] = createSignal<Vec3 | null>(null);
 
@@ -80,12 +104,21 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
     setDragPos(dp ? [...dp.position] : null);
   });
 
-  const clearContent = () => {
-    for (const d of frameDisposables) d.dispose();
-    frameDisposables = [];
-    for (const l of frameLabels) l.element.remove();
-    frameLabels = [];
-    while (contentGroup.children.length) contentGroup.remove(contentGroup.children[0]);
+  const clearStatic = () => {
+    for (const d of staticDisposables) d.dispose();
+    staticDisposables = [];
+    for (const l of staticLabels) l.element.remove();
+    staticLabels = [];
+    activeAnimations = [];
+    while (staticGroup.children.length) staticGroup.remove(staticGroup.children[0]);
+  };
+
+  const clearDynamic = () => {
+    for (const d of dynamicDisposables) d.dispose();
+    dynamicDisposables = [];
+    for (const l of dynamicLabels) l.element.remove();
+    dynamicLabels = [];
+    while (dynamicGroup.children.length) dynamicGroup.remove(dynamicGroup.children[0]);
   };
 
   const resize = (w: number) => {
@@ -162,6 +195,10 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
     controls.enableDamping = true;
 
     contentGroup = new THREE.Group();
+    staticGroup = new THREE.Group();
+    dynamicGroup = new THREE.Group();
+    contentGroup.add(staticGroup);
+    contentGroup.add(dynamicGroup);
     scene.add(contentGroup);
 
     el.style.height = `${h0}px`;
@@ -170,6 +207,27 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
     const tick = () => {
       rafId = requestAnimationFrame(tick);
       controls.update();
+
+      // Advance any running path-marker animations in place — plain closure state, not a Solid
+      // signal, so this never touches the reactive graph or retriggers a content rebuild.
+      if (activeAnimations.length) {
+        const now = performance.now();
+        for (let i = activeAnimations.length - 1; i >= 0; i--) {
+          const anim = activeAnimations[i];
+          const segments = anim.points.length - 1;
+          if (segments <= 0) {
+            activeAnimations.splice(i, 1);
+            continue;
+          }
+          const t = Math.min(1, (now - anim.startTime) / anim.durationMs);
+          const scaled = t * segments;
+          const segIdx = Math.min(segments - 1, Math.floor(scaled));
+          const localT = scaled - segIdx;
+          anim.mesh.position.lerpVectors(anim.points[segIdx], anim.points[segIdx + 1], localT);
+          if (t >= 1) activeAnimations.splice(i, 1);
+        }
+      }
+
       renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
     };
@@ -194,17 +252,22 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
     });
   });
 
+  // --- Static content effect -------------------------------------------------------------
+  // Rebuilds everything that is derived purely from the spec's static fields: planes, surfaces,
+  // paths, and the axes gizmo. Deliberately does NOT read `dragPos()` — that's the whole point.
+  // A surface mesh can be up to 81x81 (~6,500) vertices, each requiring a mathjs evaluation to
+  // build; re-sampling that on every pointer-move frame while dragging a point would be a real
+  // perf problem, so this effect only reruns when `props.spec` itself changes (i.e. a new spec
+  // arrives from the agent), never on drag.
   createEffect(() => {
     const spec = props.spec;
-    const live = dragPos();
     if (!scene) return; // guard first run before onMount has initialized three.js
 
-    clearContent();
-    draggableMesh = null;
+    clearStatic();
 
-    const points = spec.points ?? [];
-    const explicitVectors = spec.vectors ?? [];
     const planes = spec.planes ?? [];
+    const surfaces = spec.surfaces ?? [];
+    const paths = spec.paths ?? [];
 
     // Planes
     planes.forEach((plane, i) => {
@@ -219,24 +282,173 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.copy(v3(plane.point));
       mesh.quaternion.copy(quat);
-      contentGroup.add(mesh);
-      frameDisposables.push(geo, mat);
+      staticGroup.add(mesh);
+      staticDisposables.push(geo, mat);
 
       const edgesGeo = new THREE.EdgesGeometry(geo);
       const edgesMat = new THREE.LineBasicMaterial({ color: c });
       const edges = new THREE.LineSegments(edgesGeo, edgesMat);
       edges.position.copy(v3(plane.point));
       edges.quaternion.copy(quat);
-      contentGroup.add(edges);
-      frameDisposables.push(edgesGeo, edgesMat);
+      staticGroup.add(edges);
+      staticDisposables.push(edgesGeo, edgesMat);
 
       if (plane.label) {
         const label = makeLabel(plane.label, c);
         label.position.copy(v3(plane.point));
-        contentGroup.add(label);
-        frameLabels.push(label);
+        staticGroup.add(label);
+        staticLabels.push(label);
       }
     });
+
+    // Surfaces (loss landscapes, etc.) — a failed sample (bad mathjs expression) skips just that
+    // surface, with a console.warn, rather than throwing and blanking the whole scene.
+    surfaces.forEach((surface, i) => {
+      const xDomain = surface.xDomain ?? [-3, 3];
+      const yDomain = surface.yDomain ?? [-3, 3];
+      const resolution = clampResolution(surface.resolution ?? 40);
+      const result = sampleSurface(surface.fn, xDomain, yDomain, resolution);
+      if (!result.ok) {
+        console.warn(`[Scene3D] skipping surface "${surface.fn}": ${result.error}`);
+        return;
+      }
+      const { xs, ys, zs, zMin, zMax } = result.surface;
+      const scale = surface.colorScale ?? 'sequential';
+      const opacity = surface.opacity ?? 0.85;
+      const c = color(i);
+
+      const xSpan = Math.abs(xDomain[1] - xDomain[0]) || 1;
+      const ySpan = Math.abs(yDomain[1] - yDomain[0]) || 1;
+      const geo = new THREE.PlaneGeometry(xSpan, ySpan, resolution, resolution);
+
+      // PlaneGeometry's own vertex order is column-fastest-then-row (idx = ix + (resolution+1)*iy),
+      // which matches sampleSurface()'s row-major (x-fastest, then y) output exactly — so we can
+      // overwrite every vertex's full x/y/z directly from the sampled grid, keeping the same
+      // [x, y, z] -> THREE.Vector3 convention used everywhere else in this file (see v3()),
+      // rather than relying on PlaneGeometry's own (differently-centered) x/y placement.
+      const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
+      const colors = new Float32Array(xs.length * 3);
+      for (let idx = 0; idx < xs.length; idx++) {
+        posAttr.setXYZ(idx, xs[idx], ys[idx], zs[idx]);
+        const [r, g, b] = cellRgb(zs[idx], zMin, zMax, scale);
+        colors[idx * 3] = r / 255;
+        colors[idx * 3 + 1] = g / 255;
+        colors[idx * 3 + 2] = b / 255;
+      }
+      posAttr.needsUpdate = true;
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+      if (!surface.wireframe) {
+        // This scene is fully unlit (MeshBasicMaterial everywhere) — no lighting rig is added,
+        // so vertex colors (not shading) carry all the height information.
+        const mat = new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity,
+          side: THREE.DoubleSide,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        staticGroup.add(mesh);
+        staticDisposables.push(mat);
+      }
+
+      // Grid/edge overlay: always present for readability. When `wireframe` is true, this is the
+      // *only* thing rendered (no filled mesh above); otherwise it's an outline over the surface.
+      const edgesGeo = new THREE.EdgesGeometry(geo);
+      const edgesMat = new THREE.LineBasicMaterial({ color: c, transparent: !surface.wireframe, opacity: surface.wireframe ? 1 : 0.5 });
+      const edges = new THREE.LineSegments(edgesGeo, edgesMat);
+      staticGroup.add(edges);
+      staticDisposables.push(edgesGeo, edgesMat);
+      // geo itself is shared by the mesh and EdgesGeometry's source; EdgesGeometry copies its own
+      // buffers, so `geo` is safe to dispose independently once both consumers are queued.
+      staticDisposables.push(geo);
+
+      if (surface.label) {
+        const midIdx = Math.floor(xs.length / 2);
+        const label = makeLabel(surface.label, c);
+        label.position.set(xs[midIdx], ys[midIdx], zs[midIdx]);
+        staticGroup.add(label);
+        staticLabels.push(label);
+      }
+    });
+
+    // Paths (e.g. gradient-descent trajectories) — waypoints are always agent-supplied; this
+    // renderer never computes them.
+    paths.forEach((path, i) => {
+      if (path.points.length < 2) return;
+      const c = color(path.colorIndex ?? i);
+      const vecs = path.points.map(v3);
+
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(vecs);
+      const lineMat = new THREE.LineBasicMaterial({ color: c });
+      const line = new THREE.Line(lineGeo, lineMat);
+      staticGroup.add(line);
+      staticDisposables.push(lineGeo, lineMat);
+
+      if (path.showMarkers !== false) {
+        vecs.forEach((pos) => {
+          const geo = new THREE.SphereGeometry(0.08, 16, 16);
+          const mat = new THREE.MeshBasicMaterial({ color: c });
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.copy(pos);
+          staticGroup.add(mesh);
+          staticDisposables.push(geo, mat);
+        });
+      }
+
+      if (path.label) {
+        const label = makeLabel(path.label, c);
+        label.position.copy(vecs[vecs.length - 1]);
+        staticGroup.add(label);
+        staticLabels.push(label);
+      }
+
+      if (path.animate) {
+        const geo = new THREE.SphereGeometry(0.1, 16, 16);
+        const mat = new THREE.MeshBasicMaterial({ color: c });
+        const marker = new THREE.Mesh(geo, mat);
+        marker.position.copy(vecs[0]);
+        staticGroup.add(marker);
+        staticDisposables.push(geo, mat);
+        activeAnimations.push({
+          mesh: marker,
+          points: vecs,
+          startTime: performance.now(),
+          durationMs: PATH_ANIMATION_DURATION_MS,
+        });
+      }
+    });
+
+    // Axes
+    if (spec.showAxes !== false) {
+      const axes = new THREE.AxesHelper(4);
+      staticGroup.add(axes);
+      staticDisposables.push({
+        dispose: () => {
+          axes.geometry.dispose();
+          (axes.material as THREE.Material).dispose();
+        },
+      });
+    }
+
+    resize(currentWidth || el.offsetWidth);
+  });
+
+  // --- Dynamic content effect ------------------------------------------------------------
+  // Points, explicit vectors, and the auto-derived projection (ŷ, e) — unchanged behavior from
+  // before the surface/path work. This is the only effect that reads `dragPos()`, so it's the
+  // only one that reruns on every drag frame; it only ever touches `dynamicGroup`.
+  createEffect(() => {
+    const spec = props.spec;
+    const live = dragPos();
+    if (!scene) return; // guard first run before onMount has initialized three.js
+
+    clearDynamic();
+    draggableMesh = null;
+
+    const points = spec.points ?? [];
+    const explicitVectors = spec.vectors ?? [];
+    const planes = spec.planes ?? []; // read-only here: plane *meshes* live in the static effect above
 
     // Points
     points.forEach((p, i) => {
@@ -247,15 +459,15 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.copy(v3(pos));
       mesh.userData.draggable = !!p.draggable;
-      contentGroup.add(mesh);
-      frameDisposables.push(geo, mat);
+      dynamicGroup.add(mesh);
+      dynamicDisposables.push(geo, mat);
       if (p.draggable) draggableMesh = mesh;
 
       if (p.label) {
         const label = makeLabel(p.label, c);
         label.position.copy(v3(pos));
-        contentGroup.add(label);
-        frameLabels.push(label);
+        dynamicGroup.add(label);
+        dynamicLabels.push(label);
       }
     });
 
@@ -272,15 +484,15 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
       // true dashed line + separate cone — simpler and robust for this use case.
       const hex = vec.style === 'dashed' ? muted(c) : new THREE.Color(c).getHex();
       const arrow = new THREE.ArrowHelper(dir, from, len, hex, Math.min(0.3, len * 0.2), Math.min(0.2, len * 0.15));
-      contentGroup.add(arrow);
-      frameDisposables.push({ dispose: () => disposeArrow(arrow) });
+      dynamicGroup.add(arrow);
+      dynamicDisposables.push({ dispose: () => disposeArrow(arrow) });
 
       if (vec.label) {
         const mid = from.clone().add(to).multiplyScalar(0.5);
         const label = makeLabel(vec.label, `#${hex.toString(16).padStart(6, '0')}`);
         label.position.copy(mid);
-        contentGroup.add(label);
-        frameLabels.push(label);
+        dynamicGroup.add(label);
+        dynamicLabels.push(label);
       }
     });
 
@@ -302,13 +514,13 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
       const yMat = new THREE.MeshBasicMaterial({ color: yHatColor });
       const yMesh = new THREE.Mesh(yGeo, yMat);
       yMesh.position.copy(yHat);
-      contentGroup.add(yMesh);
-      frameDisposables.push(yGeo, yMat);
+      dynamicGroup.add(yMesh);
+      dynamicDisposables.push(yGeo, yMat);
 
       const yLabel = makeLabel('ŷ', yHatColor);
       yLabel.position.copy(yHat);
-      contentGroup.add(yLabel);
-      frameLabels.push(yLabel);
+      dynamicGroup.add(yLabel);
+      dynamicLabels.push(yLabel);
 
       // Solid vector: plane point -> ŷ (the projection itself)
       const projDir = yHat.clone().sub(planePoint);
@@ -316,8 +528,8 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
       if (projLen > 1e-6) {
         projDir.normalize();
         const projArrow = new THREE.ArrowHelper(projDir, planePoint, projLen, yHatColor, Math.min(0.3, projLen * 0.2), Math.min(0.2, projLen * 0.15));
-        contentGroup.add(projArrow);
-        frameDisposables.push({ dispose: () => disposeArrow(projArrow) });
+        dynamicGroup.add(projArrow);
+        dynamicDisposables.push({ dispose: () => disposeArrow(projArrow) });
       }
 
       // Dashed residual: ŷ -> original point (muted color, per the dashed-style decision above)
@@ -327,27 +539,15 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
         eDir.normalize();
         const eHex = muted(color((plane.colorIndex ?? 0) + 2));
         const eArrow = new THREE.ArrowHelper(eDir, yHat, eLen, eHex, Math.min(0.3, eLen * 0.2), Math.min(0.2, eLen * 0.15));
-        contentGroup.add(eArrow);
-        frameDisposables.push({ dispose: () => disposeArrow(eArrow) });
+        dynamicGroup.add(eArrow);
+        dynamicDisposables.push({ dispose: () => disposeArrow(eArrow) });
 
         const eMid = yHat.clone().add(p).multiplyScalar(0.5);
         const eLabel = makeLabel('e', `#${eHex.toString(16).padStart(6, '0')}`);
         eLabel.position.copy(eMid);
-        contentGroup.add(eLabel);
-        frameLabels.push(eLabel);
+        dynamicGroup.add(eLabel);
+        dynamicLabels.push(eLabel);
       }
-    }
-
-    // Axes
-    if (spec.showAxes !== false) {
-      const axes = new THREE.AxesHelper(4);
-      contentGroup.add(axes);
-      frameDisposables.push({
-        dispose: () => {
-          axes.geometry.dispose();
-          (axes.material as THREE.Material).dispose();
-        },
-      });
     }
 
     resize(currentWidth || el.offsetWidth);
@@ -355,7 +555,8 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
 
   onCleanup(() => {
     cancelAnimationFrame(rafId);
-    clearContent();
+    clearStatic();
+    clearDynamic();
     controls?.dispose();
     renderer?.dispose();
     el.replaceChildren();
