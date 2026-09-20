@@ -15,10 +15,14 @@ const DIM_OPACITY = 0.35;
 // Box width/height/font-size scale by size, unlike chalk-graph's fixed SIZE_MAX_WIDTH
 // container cap — the number of nodes/edges varies per spec, so there is no single
 // sensible max width; the container scrolls instead (see the wrapping div below).
+// `gap` is wide enough to fit a wrapped edge label (see the label foreignObject below)
+// without it bleeding into the neighboring node boxes on either side — the previous,
+// narrower gaps (30/44/60) were sized for a bare unlabeled arrow and let any real edge
+// label text overlap both adjacent boxes.
 const NODE_SIZE: Record<'small' | 'medium' | 'large', { width: number; height: number; fontSize: number; gap: number }> = {
-  small: { width: 88, height: 52, fontSize: 11, gap: 30 },
-  medium: { width: 112, height: 64, fontSize: 13, gap: 44 },
-  large: { width: 140, height: 80, fontSize: 15, gap: 60 },
+  small: { width: 88, height: 52, fontSize: 11, gap: 64 },
+  medium: { width: 112, height: 64, fontSize: 13, gap: 84 },
+  large: { width: 140, height: 80, fontSize: 15, gap: 104 },
 };
 
 let _nextId = 0;
@@ -289,24 +293,32 @@ const ComputeGraph: Component<{ spec: ChalkComputeGraphSpec }> = (props) => {
                     marker-end={`url(#${markerId})`}
                   />
                   <Show when={line.edge.label}>
-                    <foreignObject
-                      x={line.labelX - 60}
-                      y={line.labelY - 11}
-                      width={120}
-                      height={22}
-                      style={{ overflow: 'visible' }}
-                    >
-                      <div
-                        // @ts-expect-error -- xmlns is valid on a foreignObject child but not in Solid's JSX typings
-                        xmlns="http://www.w3.org/1999/xhtml"
-                        class="w-max mx-auto max-w-48 flex items-center justify-center text-[11px] leading-none px-1 py-0.5 rounded border border-slate-200 bg-white/90 whitespace-nowrap"
-                      >
-                        <SpecRenderer
-                          spec={{ kind: 'markdown', content: `$${line.edge.label}$` } as unknown as RootSpec}
-                          apiBase=""
-                        />
-                      </div>
-                    </foreignObject>
+                    {(() => {
+                      // Width is tied to the layer gap (not a fixed constant) so the label can
+                      // never bleed into the neighboring node boxes on either side, however long
+                      // the gap is at the current size — it wraps onto more lines instead.
+                      const labelWidth = dims().gap - 8;
+                      return (
+                        <foreignObject
+                          x={line.labelX - labelWidth / 2}
+                          y={line.labelY - 18}
+                          width={labelWidth}
+                          height={36}
+                          style={{ overflow: 'visible' }}
+                        >
+                          <div
+                            // @ts-expect-error -- xmlns is valid on a foreignObject child but not in Solid's JSX typings
+                            xmlns="http://www.w3.org/1999/xhtml"
+                            class="w-full h-full flex items-center justify-center text-center text-[11px] leading-tight px-1 py-0.5 rounded border border-slate-200 bg-white/90 break-words"
+                          >
+                            <SpecRenderer
+                              spec={{ kind: 'markdown', content: `$${line.edge.label}$` } as unknown as RootSpec}
+                              apiBase=""
+                            />
+                          </div>
+                        </foreignObject>
+                      );
+                    })()}
                   </Show>
                 </g>
               )}

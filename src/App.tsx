@@ -96,6 +96,23 @@ const App: Component = () => {
 
   const refreshList = () => setConvList(getAllConversations());
   const childMap = () => getChildMap(convList());
+  const [menuOpen, setMenuOpen] = createSignal(false);
+
+  // Aggregate cost/tokens across every stored conversation (not just the active one) —
+  // convList is refreshed after each turn persists, so this stays current.
+  const totalUsage = () =>
+    convList().reduce(
+      (acc, c) => {
+        const u = c.usage;
+        if (!u) return acc;
+        return {
+          costUsd: acc.costUsd + u.costUsd,
+          tokens:
+            acc.tokens + u.inputTokens + u.outputTokens + u.cacheCreationTokens + u.cacheReadTokens,
+        };
+      },
+      { costUsd: 0, tokens: 0 },
+    );
 
   const saveKey = (key: string) => {
     setStoredKey(key);
@@ -105,6 +122,13 @@ const App: Component = () => {
   const forgetKey = () => {
     clearStoredKey();
     setApiKey(null);
+  };
+
+  const confirmForgetKey = () => {
+    if (window.confirm('Clear the stored Anthropic API key? You will need to re-enter it to keep chatting.')) {
+      forgetKey();
+    }
+    setMenuOpen(false);
   };
 
   const activateConv = (conv: Conversation) => {
@@ -262,11 +286,11 @@ const App: Component = () => {
                 </For>
               </select>
             </div>
-            <div class="ml-auto flex gap-3 flex-shrink-0">
+            <div class="ml-auto flex items-center gap-3 flex-shrink-0 relative">
               <Show when={activeConv.usage}>
                 <span
                   class="text-xs text-gray-500 font-mono whitespace-nowrap cursor-default"
-                  title={`${formatTokens(activeConv.usage!.inputTokens)} input, ${formatTokens(activeConv.usage!.outputTokens)} output, ${formatTokens(activeConv.usage!.cacheReadTokens)} cache read, ${formatTokens(activeConv.usage!.cacheCreationTokens)} cache write`}
+                  title={`This conversation — ${formatTokens(activeConv.usage!.inputTokens)} input, ${formatTokens(activeConv.usage!.outputTokens)} output, ${formatTokens(activeConv.usage!.cacheReadTokens)} cache read, ${formatTokens(activeConv.usage!.cacheCreationTokens)} cache write`}
                 >
                   {formatCost(activeConv.usage!.costUsd)}
                   {' · '}
@@ -279,10 +303,31 @@ const App: Component = () => {
                   {' tokens'}
                 </span>
               </Show>
-              <Show when={!isKeyFromEnv()}>
-                <button class="bg-transparent border-none text-gray-500 cursor-pointer text-sm p-0 hover:text-gray-700" onClick={forgetKey}>
-                  clear key
-                </button>
+              <button
+                class="bg-transparent border border-gray-200 rounded-md text-gray-500 cursor-pointer text-xs py-1 px-2 hover:text-gray-700 hover:border-gray-300"
+                title="Usage totals & settings"
+                onClick={() => setMenuOpen((o) => !o)}
+              >
+                ⋯
+              </button>
+              <Show when={menuOpen()}>
+                <div class="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                <div class="absolute right-0 top-full mt-2 z-20 w-56 bg-white border border-gray-200 rounded-lg shadow-lg py-2.5 px-3 flex flex-col gap-2 text-sm">
+                  <div>
+                    <div class="text-[10px] uppercase tracking-wide text-gray-400 mb-0.5">All conversations</div>
+                    <div class="font-mono text-gray-700 text-xs">
+                      {formatCost(totalUsage().costUsd)} · {formatTokens(totalUsage().tokens)} tokens
+                    </div>
+                  </div>
+                  <Show when={!isKeyFromEnv()}>
+                    <button
+                      class="text-left bg-transparent border-none text-red-600 cursor-pointer text-sm p-0 pt-2 border-t border-gray-100 hover:text-red-700"
+                      onClick={confirmForgetKey}
+                    >
+                      Clear key
+                    </button>
+                  </Show>
+                </div>
               </Show>
             </div>
           </header>
