@@ -360,7 +360,7 @@ const App: Component = () => {
                 };
                 return (
                 <Show when={m.kind !== 'tool-result'}>
-                <div class="group flex flex-col gap-1 relative">
+                <div data-testid="message" class="group flex flex-col gap-1 relative">
                   <div class="text-[11px] uppercase tracking-wider text-gray-400">
                     {m.role === 'assistant' ? agent().name.toLowerCase() : 'you'}
                     <Show when={m.model}>
@@ -443,6 +443,7 @@ const App: Component = () => {
           <footer class="pt-3 px-5 pb-4 border-t border-gray-200 flex-shrink-0">
             <div class="flex gap-2">
               <textarea
+                data-testid="composer-input"
                 ref={textareaRef}
                 class="flex-1 resize-none border border-gray-300 rounded-lg py-2.5 px-3 font-[inherit] text-sm outline-none w-full box-border focus:border-gray-500"
                 placeholder={`Message ${agent().name}…  (Enter to send, Shift+Enter for newline)`}
@@ -453,6 +454,7 @@ const App: Component = () => {
                 rows={3}
               />
               <button
+                data-testid="composer-send"
                 class="border-none bg-gray-900 text-white px-5 rounded-lg cursor-pointer text-sm font-medium flex-shrink-0 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 onClick={send}
                 disabled={busy() || !input().trim()}
@@ -485,6 +487,7 @@ const KeyGate: Component<{ onSave: (key: string) => void }> = (props) => {
         directly to <code class="bg-gray-100 py-0.5 px-1.5 rounded-sm text-[0.9em]">api.anthropic.com</code>. No backend.
       </p>
       <input
+        data-testid="keygate-input"
         class="border border-gray-300 rounded-lg py-2.5 px-3 font-[inherit] outline-none w-full box-border focus:border-gray-500"
         type="password"
         placeholder="sk-ant-…"
@@ -495,6 +498,7 @@ const KeyGate: Component<{ onSave: (key: string) => void }> = (props) => {
         }}
       />
       <button
+        data-testid="keygate-submit"
         class="border-none bg-gray-900 text-white py-2.5 px-4 rounded-lg cursor-pointer text-sm font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
         disabled={!value().trim()}
         onClick={() => props.onSave(value().trim())}

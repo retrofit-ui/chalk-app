@@ -9,10 +9,12 @@
     "build": "vite build",
     "serve": "vite preview",
     "test": "vitest run",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:e2e": "playwright test"
   },
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "~1.60.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/three": "^0.185.4",
     "@vitest/ui": "^4.1.9",

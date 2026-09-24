@@ -143,7 +143,7 @@ const MatrixMultiplyView: Component<{ spec: ChalkMatmulSpec }> = (props) => {
   });
 
   return (
-    <div class="my-2">
+    <div data-kind="chalk-matmul" class="my-2">
       <Show when={spec().title}>
         <div class="text-sm font-semibold text-slate-700 mb-1">{spec().title}</div>
       </Show>

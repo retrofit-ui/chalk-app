@@ -146,7 +146,7 @@ const DrawCanvas: Component<{
   };
 
   return (
-    <div class="my-2 max-w-160" style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
+    <div data-kind="chalk-draw" class="my-2 max-w-160" style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
       {props.spec.title && <div class="text-sm font-semibold text-slate-700 mb-1">{props.spec.title}</div>}
       {props.spec.prompt && <div class="text-sm text-slate-600 mb-2 italic">{props.spec.prompt}</div>}
       <canvas

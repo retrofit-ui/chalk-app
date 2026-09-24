@@ -70,7 +70,7 @@ const VectorDiagram: Component<{ spec: ChalkVectorsSpec }> = (props) => {
   });
 
   return (
-    <div class="my-2" style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
+    <div data-kind="chalk-vectors" class="my-2" style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
       <Show when={props.spec.title}>
         <div class="text-sm font-semibold text-slate-700 mb-1">{props.spec.title}</div>
       </Show>

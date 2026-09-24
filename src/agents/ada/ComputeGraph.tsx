@@ -257,7 +257,7 @@ const ComputeGraph: Component<{ spec: ChalkComputeGraphSpec }> = (props) => {
   };
 
   return (
-    <div class="my-2">
+    <div data-kind="chalk-compute-graph" class="my-2">
       <Show when={props.spec.title}>
         <div class="text-sm font-semibold text-slate-700 mb-1">{props.spec.title}</div>
       </Show>

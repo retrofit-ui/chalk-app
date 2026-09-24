@@ -76,6 +76,7 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
       </Match>
       <Match when={props.spec.kind === 'flex'}>
         <div
+          data-kind="flex"
           class="flex data-[direction=row]:*:flex-1 data-[direction=row]:*:min-w-0"
           data-direction={(props.spec.direction as string) ?? 'column'}
           style={{
@@ -95,6 +96,7 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
       </Match>
       <Match when={props.spec.kind === 'grid'}>
         <div
+          data-kind="grid"
           class="grid *:min-w-0"
           style={{
             'grid-template-columns':
@@ -113,7 +115,7 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
         </div>
       </Match>
       <Match when={props.spec.kind === 'card'}>
-        <div class="border border-slate-200 rounded-lg bg-white overflow-hidden">
+        <div data-kind="card" class="border border-slate-200 rounded-lg bg-white overflow-hidden">
           <Show when={props.spec.header as string | undefined}>
             <div class="py-2 px-3 border-b border-slate-200 bg-slate-50 font-semibold text-sm text-slate-700">{props.spec.header as string}</div>
           </Show>
@@ -128,6 +130,7 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
       </Match>
       <Match when={props.spec.kind === 'text'}>
         <div
+          data-kind="text"
           class="leading-normal data-[variant=body]:text-sm data-[variant=body]:text-slate-800 data-[variant=muted]:text-[13px] data-[variant=muted]:text-slate-500 data-[variant=small]:text-xs data-[variant=small]:text-slate-600"
           data-variant={(props.spec.variant as string) ?? 'body'}
         >
@@ -142,11 +145,12 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
           const ctx = useContext(AnswerContext);
           const identifier = props.spec.identifier as string;
           return (
-            <div class="flex flex-col gap-1 max-w-64">
+            <div data-kind="answerbox" class="flex flex-col gap-1 max-w-64">
               <Show when={props.spec.label as string | undefined}>
                 <label class="text-xs font-medium text-slate-600">{props.spec.label as string}</label>
               </Show>
               <input
+                data-testid="answerbox-input"
                 type="text"
                 class="text-sm py-1.5 px-2.5 border border-slate-300 rounded-md text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder={props.spec.placeholder as string | undefined}
@@ -158,7 +162,7 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
         })()}
       </Match>
       <Match when={props.spec.kind === 'stat'}>
-        <div class="flex flex-wrap gap-4">
+        <div data-kind="stat" class="flex flex-wrap gap-4">
           <For
             each={
               props.spec.stats as Array<{ label: string; value: number | string; description?: string }>
@@ -218,6 +222,7 @@ const ChalkSpecRenderer: Component<{
         </For>
         <Show when={identifiers().length > 0}>
           <button
+            data-testid="answerbox-submit"
             class="self-start text-xs py-1.5 px-3.5 border-none rounded bg-blue-600 text-white cursor-pointer font-medium hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
             disabled={identifiers().some((id) => !(answers[id] ?? '').trim())}
             onClick={() => props.onAnswerSubmit?.({ ...answers })}

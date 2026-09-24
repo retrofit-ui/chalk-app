@@ -73,7 +73,7 @@ const MatrixHeatmap: Component<{ spec: ChalkMatrixSpec }> = (props) => {
   };
 
   return (
-    <div class="my-2" style={{ 'max-width': `${maxWidth()}px` }}>
+    <div data-kind="chalk-matrix" class="my-2" style={{ 'max-width': `${maxWidth()}px` }}>
       <Show when={spec().title}>
         <div class="text-sm font-semibold text-slate-700 mb-1">{spec().title}</div>
       </Show>
