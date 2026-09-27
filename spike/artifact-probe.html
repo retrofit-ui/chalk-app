@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Chalk artifact runtime probe</title>
+  <style>
+    body { font: 14px/1.5 ui-monospace, Menlo, monospace; margin: 2rem; color: #1a1a1a; }
+    h1 { font-size: 18px; font-weight: 600; }
+    pre { background: #f4f4f5; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-word; }
+    button { font: inherit; padding: 6px 12px; margin-right: 8px; cursor: pointer; }
+    .ok { color: #15803d; } .bad { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <h1>Chalk artifact runtime probe</h1>
+  <p>Answers Step 0 of the artifact-target plan: which runtime APIs does this artifact host expose?</p>
+
+  <h2>Environment</h2>
+  <pre id="env">probing…</pre>
+
+  <h2>window.claude.complete</h2>
+  <button id="ping">1. complete('…PONG')</button>
+  <button id="rich">2. complete({messages:[…]}) — richer signature?</button>
+  <pre id="claude">not run</pre>
+
+  <h2>window.storage</h2>
+  <button id="store">3. storage.set / storage.get round-trip</button>
+  <pre id="storage">not run</pre>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const show = (id, obj) => { $(id).textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2); };
+
+    function safe(fn) { try { return fn(); } catch (e) { return `THROWS: ${e && e.name}: ${e && e.message}`; } }
+    function keysDeep(o) {
+      if (!o) return null;
+      const own = Object.getOwnPropertyNames(o);
+      const proto = Object.getPrototypeOf(o);
+      const inherited = proto && proto !== Object.prototype ? Object.getOwnPropertyNames(proto) : [];
+      return { own, inherited };
+    }
+
+    show('env', {
+      href: location.href,
+      origin: location.origin,
+      isSecureContext,
+      inIframe: window.top !== window.self,
+      'typeof window.claude': typeof window.claude,
+      'window.claude keys': keysDeep(window.claude),
+      'typeof window.claude?.complete': typeof (window.claude && window.claude.complete),
+      'complete.length (declared arity)': window.claude && window.claude.complete ? window.claude.complete.length : null,
+      'complete.toString()': window.claude && window.claude.complete ? safe(() => String(window.claude.complete).slice(0, 300)) : null,
+      'typeof window.storage': typeof window.storage,
+      'window.storage keys': keysDeep(window.storage),
+      localStorage: safe(() => { localStorage.setItem('probe', '1'); return 'works'; }),
+      sessionStorage: safe(() => { sessionStorage.setItem('probe', '1'); return 'works'; }),
+      indexedDB: safe(() => typeof indexedDB),
+      'crypto.randomUUID': safe(() => crypto.randomUUID()),
+      'fetch(same-origin) allowed?': 'see console after clicking 1',
+      userAgent: navigator.userAgent,
+    });
+
+    $('ping').onclick = async () => {
+      show('claude', 'calling…');
+      const t0 = performance.now();
+      try {
+        const r = await window.claude.complete('Reply with the single word PONG and nothing else.');
+        show('claude', { ok: true, ms: Math.round(performance.now() - t0), typeofResult: typeof r, result: r });
+      } catch (e) {
+        show('claude', { ok: false, error: `${e && e.name}: ${e && e.message}`, stack: e && e.stack });
+      }
+    };
+
+    $('rich').onclick = async () => {
+      show('claude', 'calling with object arg…');
+      try {
+        const r = await window.claude.complete({
+          system: 'You are a terse assistant.',
+          messages: [{ role: 'user', content: 'Reply with the single word PONG.' }],
+        });
+        show('claude', { ok: true, note: 'object arg ACCEPTED — richer signature exists', typeofResult: typeof r, result: r });
+      } catch (e) {
+        show('claude', { ok: false, note: 'object arg rejected — string-only API', error: `${e && e.name}: ${e && e.message}` });
+      }
+    };
+
+    $('store').onclick = async () => {
+      show('storage', 'running…');
+      try {
+        const s = window.storage;
+        if (!s) throw new Error('window.storage is undefined');
+        const key = 'chalk.probe';
+        const val = JSON.stringify({ t: Date.now() });
+        const setR = await s.set(key, val);
+        const getR = await s.get(key);
+        show('storage', { ok: true, setReturned: setR, getReturned: getR, roundTripEqual: getR === val || (getR && getR.value === val) });
+      } catch (e) {
+        show('storage', { ok: false, error: `${e && e.name}: ${e && e.message}` });
+      }
+    };
+  </script>
+</body>
+</html>

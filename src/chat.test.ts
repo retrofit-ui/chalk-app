@@ -12,6 +12,7 @@ import {
 } from './chat';
 import type { Conversation } from './conversations';
 import type { Agent } from './agents/types';
+import type { Transport, TurnRequest } from './transport';
 
 vi.mock('./anthropic', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./anthropic')>();
@@ -755,6 +756,84 @@ describe('sendMessage', () => {
         { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, client },
       );
       expect(makeClient).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('transport injection', () => {
+    // A transport that never touches the SDK: yields the given deltas, then a done event
+    // whose message has no usage/id/model (the shape the artifact transport produces).
+    function fakeTransport(deltas: string[], plan?: string): Transport & { run: ReturnType<typeof vi.fn> } {
+      const run = vi.fn(async function* () {
+        for (const text of deltas) yield { type: 'text_delta' as const, text };
+        yield {
+          type: 'done' as const,
+          message: { content: [{ type: 'text' as const, text: deltas.join('') }], stop_reason: 'end_turn' },
+          plan,
+        };
+      });
+      return { run, supportsImages: false };
+    }
+
+    it('drives the turn through deps.transport and never constructs an SDK client', async () => {
+      const transport = fakeTransport(['Hel', 'lo']);
+      const { getConv, setConv } = makeConvStore();
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        { apiKey: 'artifact', agent: makeAgent(), getConv, setConv, onError: () => {}, transport },
+      );
+      expect(makeClient).not.toHaveBeenCalled();
+      expect(transport.run).toHaveBeenCalledTimes(1);
+      expect(getConv().messages[1].content).toBe('Hello');
+      expect(getConv().messages[1].stopReason).toBe('end_turn');
+    });
+
+    it('passes the agent system prompt, model, tools and prior messages to the transport', async () => {
+      const transport = fakeTransport([]);
+      const skills = [{ name: 'x', description: 'd', input_schema: { type: 'object' as const } }];
+      const { getConv, setConv } = makeConvStore({ model: 'claude-opus-4-7' });
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        { apiKey: 'k', agent: makeAgent({ systemPrompt: 'SYS', skills }), getConv, setConv, onError: () => {}, transport },
+      );
+      const req = transport.run.mock.calls[0][0] as TurnRequest;
+      expect(req.model).toBe('claude-opus-4-7');
+      expect(req.system).toBe('SYS');
+      expect(req.tools).toEqual(skills);
+      expect(req.messages.map((m) => m.role)).toEqual(['user']);
+    });
+
+    it('tolerates a done message without usage: no usage is accumulated and no error is raised', async () => {
+      const transport = fakeTransport(['ok']);
+      const onError = vi.fn();
+      const { getConv, setConv } = makeConvStore();
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError, transport },
+      );
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(null);
+      expect(getConv().usage).toBeUndefined();
+    });
+
+    it('appends a plan carried on the done event to conversation.plans', async () => {
+      const transport = fakeTransport(['Lesson.'], '# Plan\n1. Intro');
+      const { getConv, setConv } = makeConvStore();
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, transport },
+      );
+      expect(getConv().plans).toEqual(['# Plan\n1. Intro']);
+    });
+
+    it('prefers deps.transport over deps.client when both are supplied', async () => {
+      const transport = fakeTransport(['via transport']);
+      const client = fakeClient(() => makeStream(['via client'], makeFinalMessage()));
+      const { getConv, setConv } = makeConvStore();
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, client, transport },
+      );
+      expect(getConv().messages[1].content).toBe('via transport');
     });
   });
 });

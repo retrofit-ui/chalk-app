@@ -12,6 +12,8 @@ import {
 } from './anthropic';
 import { deriveTitle, type Conversation } from './conversations';
 import type { Agent } from './agents/types';
+import type { FinalMessage, Transport } from './transport';
+import { sdkTransport } from './transports/sdk';
 
 export const MAX_TOOL_ROUNDS = 4;
 
@@ -29,6 +31,8 @@ export type SendMessageDeps = {
   onError: (message: string | null) => void;
   /** Injectable Anthropic client — defaults to makeClient(apiKey). Tests supply a mock here. */
   client?: Anthropic;
+  /** How the model is reached. Defaults to the SDK over `client`; the artifact build supplies window.claude here. */
+  transport?: Transport;
   /** Called wherever the original App.tsx called upsertConversation({...activeConv}). */
   persist?: (conv: Conversation) => void;
   /** Called only right after the user message is pushed (mirrors the original's setActiveId call there). */
@@ -45,7 +49,7 @@ export type SendMessageDeps = {
  */
 export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMessageDeps): Promise<void> {
   const { apiKey, agent, getConv, setConv, onError, persist, setActiveId, refreshList } = deps;
-  const client = deps.client ?? makeClient(apiKey);
+  const transport = deps.transport ?? sdkTransport(deps.client ?? makeClient(apiKey));
 
   onError(null);
 
@@ -76,55 +80,41 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
       const assistantIdx = getConv().messages.length - 1;
 
       const priorMessages = getConv().messages.slice(0, assistantIdx);
-      const lastIdx = priorMessages.length - 1;
-      const stream = client.messages.stream({
-        model,
-        max_tokens: 32000,
-        system: [
-          {
-            type: 'text',
-            text: agent.systemPrompt,
-            cache_control: { type: 'ephemeral' },
-          },
-        ],
-        tools,
-        messages: priorMessages.map((m, i) => {
-          if (i !== lastIdx) return { role: m.role, content: m.content };
-          const blocks =
-            typeof m.content === 'string'
-              ? [{ type: 'text' as const, text: m.content }]
-              : m.content.map((b) => ({ ...b }));
-          const last = blocks[blocks.length - 1];
-          if (last) {
-            (last as { cache_control?: { type: 'ephemeral' } }).cache_control = { type: 'ephemeral' };
-          }
-          return { role: m.role, content: blocks };
-        }),
-      });
 
-      for await (const event of stream) {
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'text_delta'
-        ) {
-          setConv('messages', assistantIdx, 'content', (c: string) => c + event.delta.text);
+      let finalMsg: FinalMessage | undefined;
+      let inlinePlan: string | undefined;
+      for await (const event of transport.run({ model, system: agent.systemPrompt, tools, messages: priorMessages })) {
+        if (event.type === 'text_delta') {
+          setConv('messages', assistantIdx, 'content', (c: string) => c + event.text);
+        } else {
+          finalMsg = event.message;
+          inlinePlan = event.plan;
         }
       }
+      if (!finalMsg) throw new Error('Transport ended without a final message.');
 
-      const finalMsg = await stream.finalMessage();
+      // Usage is SDK-only; the artifact runtime reports nothing, so the cost UI simply stays empty.
       const u = finalMsg.usage;
-      console.log(
-        `[cache] round=${round} input=${u.input_tokens} write=${u.cache_creation_input_tokens ?? 0} read=${u.cache_read_input_tokens ?? 0}`,
-      );
+      let turnCost: number | undefined;
+      if (u) {
+        console.log(
+          `[cache] round=${round} input=${u.input_tokens} write=${u.cache_creation_input_tokens ?? 0} read=${u.cache_read_input_tokens ?? 0}`,
+        );
 
-      const turnCost = estimateCost(model, u);
-      setConv('usage', (prev) => ({
-        inputTokens: (prev?.inputTokens ?? 0) + u.input_tokens,
-        outputTokens: (prev?.outputTokens ?? 0) + u.output_tokens,
-        cacheCreationTokens: (prev?.cacheCreationTokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
-        cacheReadTokens: (prev?.cacheReadTokens ?? 0) + (u.cache_read_input_tokens ?? 0),
-        costUsd: (prev?.costUsd ?? 0) + turnCost,
-      }));
+        turnCost = estimateCost(model, u);
+        const cost = turnCost;
+        setConv('usage', (prev) => ({
+          inputTokens: (prev?.inputTokens ?? 0) + u.input_tokens,
+          outputTokens: (prev?.outputTokens ?? 0) + u.output_tokens,
+          cacheCreationTokens: (prev?.cacheCreationTokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
+          cacheReadTokens: (prev?.cacheReadTokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+          costUsd: (prev?.costUsd ?? 0) + cost,
+        }));
+      }
+
+      if (inlinePlan) {
+        setConv('plans', produce((ps: string[]) => { ps.push(inlinePlan); }));
+      }
 
       setConv('messages', assistantIdx, 'debug', {
         estimatedCostUsd: turnCost,
