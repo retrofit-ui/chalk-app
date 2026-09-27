@@ -18,6 +18,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
+      - run: pnpm build:artifact
+      # Claude artifacts must be a single document under 16 MiB.
+      - name: Check artifact build
+        run: |
+          set -eu
+          test "$(ls dist-artifact | wc -l)" -eq 1
+          size=$(stat -c%s dist-artifact/chalk.html)
+          echo "dist-artifact/chalk.html is $size bytes"
+          test "$size" -lt 16777216
+      - uses: actions/upload-artifact@v4
+        if: ${{ !env.ACT }} # no artifact server under the local `act -j ci` pre-push hook
+        with:
+          name: chalk-artifact
+          path: dist-artifact/chalk.html
+          retention-days: 30
 
   # Separate job so the pre-push `act -j ci` hook stays browser-free.
   e2e:
@@ -33,6 +48,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      # e2e/artifact.spec.ts drives the built single-file artifact; it skips itself without this.
+      - run: pnpm build:artifact
       - run: pnpm test:e2e
         env:
           CI: 1
