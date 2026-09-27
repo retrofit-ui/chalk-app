@@ -15,6 +15,22 @@ export function findPreviousAnswers(
 
 const CHALK_SPEC_FENCE = /```chalk-spec\n([\s\S]*?)\n```/g;
 const CHALK_SPEC_OPENER = '```chalk-spec';
+// Trailing newlines are swallowed too so removing the fence doesn't leave a blank gap.
+const CHALK_PLAN_FENCE = /```chalk-plan\n([\s\S]*?)\n```\n*/;
+
+/**
+ * Splits a fenced `chalk-plan` block (emitted by agents running without tools) out of a
+ * reply. Only the first fence is taken; the remaining text is returned as `content`.
+ */
+export function extractPlan(content: string): { content: string; plan?: string } {
+  const match = content.match(CHALK_PLAN_FENCE);
+  if (!match || match.index === undefined) return { content, plan: undefined };
+  const plan = match[1].trim();
+  return {
+    content: content.slice(0, match.index) + content.slice(match.index + match[0].length),
+    plan: plan || undefined,
+  };
+}
 
 export function parseChunks(content: string): ChalkViewSpec[] {
   const chunks: ChalkViewSpec[] = [];

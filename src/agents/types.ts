@@ -21,6 +21,10 @@ export type Agent = {
   version: string;
   description: string;
   systemPrompt: string;
+  // System prompt for transports that cannot call tools (the Claude artifact runtime):
+  // everything `skills` would supply on demand is inlined, and the lesson plan is
+  // requested as a fenced `chalk-plan` block. Absent → fall back to systemPrompt.
+  inlinePrompt?: string;
   skills: Skill[];
   // Resolves a tool call named in `skills` locally (no network) and returns
   // the text to send back as the tool_result. Absent/undefined tools are
