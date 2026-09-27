@@ -13,6 +13,8 @@ import { deriveTitle, type Conversation } from './conversations';
 import type { Agent } from './agents/types';
 import type { FinalMessage, Transport } from './transport';
 import { makeClient, sdkTransport } from './transports/sdk';
+import { artifactTransport } from './transports/artifact';
+import { IS_ARTIFACT } from './target';
 
 export const MAX_TOOL_ROUNDS = 4;
 
@@ -48,7 +50,10 @@ export type SendMessageDeps = {
  */
 export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMessageDeps): Promise<void> {
   const { apiKey, agent, getConv, setConv, onError, persist, setActiveId, refreshList } = deps;
-  const transport = deps.transport ?? sdkTransport(deps.client ?? makeClient(apiKey));
+  // IS_ARTIFACT is a build-time constant, so the unused branch — and with it the whole SDK
+  // in the artifact build — is dropped by the bundler.
+  const transport =
+    deps.transport ?? (IS_ARTIFACT ? artifactTransport() : sdkTransport(deps.client ?? makeClient(apiKey)));
 
   onError(null);
 
