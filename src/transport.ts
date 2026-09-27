@@ -46,4 +46,9 @@ export interface Transport {
   run(req: TurnRequest): AsyncIterable<TurnEvent>;
   /** Whether image content blocks (drawing submissions) can be sent through this transport. */
   supportsImages: boolean;
+  /**
+   * Whether the model can call tools through this transport. When false, chat.ts sends the
+   * agent's `inlinePrompt` (docs inlined, plan as a fenced block) and no tool definitions.
+   */
+  supportsTools: boolean;
 }

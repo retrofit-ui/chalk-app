@@ -74,7 +74,10 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
 
   try {
     const model = getConv().model ?? DEFAULT_MODEL;
-    const tools = agent.skills.length > 0 ? (agent.skills as never) : undefined;
+    // A transport without tool calling gets the agent's inline prompt (spec docs embedded,
+    // lesson plan as a fenced block) and no tool definitions; the tool loop below never fires.
+    const system = transport.supportsTools ? agent.systemPrompt : agent.inlinePrompt ?? agent.systemPrompt;
+    const tools = transport.supportsTools && agent.skills.length > 0 ? (agent.skills as never) : undefined;
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const assistantMsgId = crypto.randomUUID();
@@ -87,7 +90,7 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
 
       let finalMsg: FinalMessage | undefined;
       let inlinePlan: string | undefined;
-      for await (const event of transport.run({ model, system: agent.systemPrompt, tools, messages: priorMessages })) {
+      for await (const event of transport.run({ model, system, tools, messages: priorMessages })) {
         if (event.type === 'text_delta') {
           setConv('messages', assistantIdx, 'content', (c: string) => c + event.text);
         } else {

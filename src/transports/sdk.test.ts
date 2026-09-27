@@ -94,8 +94,9 @@ describe('sdkTransport', () => {
     ]);
   });
 
-  it('does not accept image input claims it cannot honor: supportsImages is true for the SDK', () => {
+  it('supports images and tool calling', () => {
     const { client } = fakeClient(() => makeStream([], {}));
     expect(sdkTransport(client).supportsImages).toBe(true);
+    expect(sdkTransport(client).supportsTools).toBe(true);
   });
 });

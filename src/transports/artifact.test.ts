@@ -79,8 +79,9 @@ describe('artifactTransport', () => {
     return complete;
   }
 
-  it('cannot send images', () => {
+  it('cannot send images or call tools', () => {
     expect(artifactTransport().supportsImages).toBe(false);
+    expect(artifactTransport().supportsTools).toBe(false);
   });
 
   it('throws a clear error when window.claude.complete is missing', async () => {

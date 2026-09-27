@@ -762,7 +762,11 @@ describe('sendMessage', () => {
   describe('transport injection', () => {
     // A transport that never touches the SDK: yields the given deltas, then a done event
     // whose message has no usage/id/model (the shape the artifact transport produces).
-    function fakeTransport(deltas: string[], plan?: string): Transport & { run: ReturnType<typeof vi.fn> } {
+    function fakeTransport(
+      deltas: string[],
+      plan?: string,
+      opts: { supportsTools?: boolean } = {},
+    ): Transport & { run: ReturnType<typeof vi.fn> } {
       const run = vi.fn(async function* () {
         for (const text of deltas) yield { type: 'text_delta' as const, text };
         yield {
@@ -771,7 +775,7 @@ describe('sendMessage', () => {
           plan,
         };
       });
-      return { run, supportsImages: false };
+      return { run, supportsImages: false, supportsTools: opts.supportsTools ?? true };
     }
 
     it('drives the turn through deps.transport and never constructs an SDK client', async () => {
@@ -800,6 +804,37 @@ describe('sendMessage', () => {
       expect(req.system).toBe('SYS');
       expect(req.tools).toEqual(skills);
       expect(req.messages.map((m) => m.role)).toEqual(['user']);
+    });
+
+    it('sends the inline prompt and no tools to a transport that cannot call tools', async () => {
+      const transport = fakeTransport([], undefined, { supportsTools: false });
+      const skills = [{ name: 'x', description: 'd', input_schema: { type: 'object' as const } }];
+      const { getConv, setConv } = makeConvStore();
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        {
+          apiKey: 'k',
+          agent: makeAgent({ systemPrompt: 'SYS', inlinePrompt: 'INLINE', skills }),
+          getConv,
+          setConv,
+          onError: () => {},
+          transport,
+        },
+      );
+      const req = transport.run.mock.calls[0][0] as TurnRequest;
+      expect(req.system).toBe('INLINE');
+      expect(req.tools).toBeUndefined();
+    });
+
+    it('falls back to the system prompt when a tool-less transport meets an agent without an inline prompt', async () => {
+      const transport = fakeTransport([], undefined, { supportsTools: false });
+      const { getConv, setConv } = makeConvStore();
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        { apiKey: 'k', agent: makeAgent({ systemPrompt: 'SYS' }), getConv, setConv, onError: () => {}, transport },
+      );
+      const req = transport.run.mock.calls[0][0] as TurnRequest;
+      expect(req.system).toBe('SYS');
     });
 
     it('tolerates a done message without usage: no usage is accumulated and no error is raised', async () => {

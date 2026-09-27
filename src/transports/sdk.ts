@@ -15,6 +15,7 @@ export function makeClient(apiKey: string): Anthropic {
 export function sdkTransport(client: Anthropic): Transport {
   return {
     supportsImages: true,
+    supportsTools: true,
     async *run(req: TurnRequest): AsyncIterable<TurnEvent> {
       const lastIdx = req.messages.length - 1;
       const stream = client.messages.stream({

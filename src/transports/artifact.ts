@@ -42,6 +42,7 @@ export function buildArtifactPrompt(req: TurnRequest): string {
 export function artifactTransport(): Transport {
   return {
     supportsImages: false,
+    supportsTools: false,
     async *run(req: TurnRequest): AsyncIterable<TurnEvent> {
       const complete = typeof window !== 'undefined' ? window.claude?.complete : undefined;
       if (typeof complete !== 'function') throw new Error(MISSING_RUNTIME);
