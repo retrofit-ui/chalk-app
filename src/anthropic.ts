@@ -1,6 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { local, STORAGE_KEYS } from './storage';
 
-const KEY_STORAGE = 'chalk.api_key';
+// Deliberately SDK-free: the artifact build imports this module for types, pricing and key
+// helpers but must not pull @anthropic-ai/sdk into its bundle. The client lives in transports/sdk.ts.
+
+const KEY_STORAGE = STORAGE_KEYS.apiKey;
 const ENV_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-6';
@@ -48,24 +51,20 @@ export function estimateCost(
 export function getStoredKey(): string | null {
   // Build-time env var takes priority — skips the key-gate entirely.
   if (ENV_KEY) return ENV_KEY;
-  return localStorage.getItem(KEY_STORAGE);
+  return local.getItem(KEY_STORAGE);
 }
 
 export function setStoredKey(key: string): void {
-  localStorage.setItem(KEY_STORAGE, key);
+  local.setItem(KEY_STORAGE, key);
 }
 
 export function clearStoredKey(): void {
   if (ENV_KEY) return;
-  localStorage.removeItem(KEY_STORAGE);
+  local.removeItem(KEY_STORAGE);
 }
 
 export function isKeyFromEnv(): boolean {
   return Boolean(ENV_KEY);
-}
-
-export function makeClient(apiKey: string): Anthropic {
-  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 }
 
 export type TextBlock = { type: 'text'; text: string };

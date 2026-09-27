@@ -1,5 +1,11 @@
-import type Anthropic from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import type { FinalMessage, Transport, TurnRequest, TurnEvent } from '../transport';
+
+// The only module that imports the SDK, so the artifact build (which never reaches this
+// file) can leave it out of the bundle entirely.
+export function makeClient(apiKey: string): Anthropic {
+  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+}
 
 /**
  * Direct api.anthropic.com access with the user's own key. This is the original chat.ts

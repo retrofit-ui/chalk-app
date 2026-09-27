@@ -5,7 +5,6 @@ import type Anthropic from '@anthropic-ai/sdk';
 import {
   DEFAULT_MODEL,
   estimateCost,
-  makeClient,
   type ChatMessage,
   type TextBlock,
   type ToolUseBlock,
@@ -13,7 +12,7 @@ import {
 import { deriveTitle, type Conversation } from './conversations';
 import type { Agent } from './agents/types';
 import type { FinalMessage, Transport } from './transport';
-import { sdkTransport } from './transports/sdk';
+import { makeClient, sdkTransport } from './transports/sdk';
 
 export const MAX_TOOL_ROUNDS = 4;
 

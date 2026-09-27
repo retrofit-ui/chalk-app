@@ -14,11 +14,11 @@ import type { Conversation } from './conversations';
 import type { Agent } from './agents/types';
 import type { Transport, TurnRequest } from './transport';
 
-vi.mock('./anthropic', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./anthropic')>();
+vi.mock('./transports/sdk', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./transports/sdk')>();
   return { ...actual, makeClient: vi.fn(actual.makeClient) };
 });
-import { makeClient } from './anthropic';
+import { makeClient } from './transports/sdk';
 
 // --- test helpers -----------------------------------------------------
 

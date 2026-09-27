@@ -34,6 +34,12 @@ import ReplyBox from './components/ReplyBox';
 import DebugPanel from './components/DebugPanel';
 import Sidebar from './Sidebar';
 import { formatCost, formatTokens } from './format';
+import { IS_ARTIFACT } from './target';
+import { artifactTransport } from './transports/artifact';
+
+// In the artifact build the viewer's claude.ai session is the credential, so the key gate
+// never shows; the placeholder just satisfies the `apiKey` plumbing below.
+const ARTIFACT_KEY = 'artifact';
 
 function resolveInitialConv(): Conversation {
   const savedId = getActiveId();
@@ -45,7 +51,7 @@ function resolveInitialConv(): Conversation {
 }
 
 const App: Component = () => {
-  const [apiKey, setApiKey] = createSignal<string | null>(getStoredKey());
+  const [apiKey, setApiKey] = createSignal<string | null>(IS_ARTIFACT ? ARTIFACT_KEY : getStoredKey());
   const [activeConv, setActiveConv] = createStore<Conversation>(resolveInitialConv());
   const [convList, setConvList] = createSignal<Conversation[]>(getAllConversations());
   const [input, setInput] = createSignal('');
@@ -204,6 +210,7 @@ const App: Component = () => {
       await runSendMessage(userMsg, {
         apiKey: key,
         agent: agent(),
+        transport: IS_ARTIFACT ? artifactTransport() : undefined,
         getConv: () => activeConv,
         setConv: setActiveConv,
         onError: setError,
@@ -228,6 +235,10 @@ const App: Component = () => {
   };
 
   const onDrawSubmit = (imageBase64: string) => {
+    if (IS_ARTIFACT) {
+      setError('Drawing submission is not available in the artifact version.');
+      return;
+    }
     void sendMessage(buildDrawSubmissionMessage(imageBase64));
   };
 
@@ -275,17 +286,20 @@ const App: Component = () => {
                   {(a) => <option value={a.id}>{a.name}</option>}
                 </For>
               </select>
-              <select
-                class="text-[11px] text-gray-300 font-mono bg-transparent border-none cursor-pointer outline-none p-0 hover:text-gray-400 disabled:opacity-50 disabled:cursor-default"
-                value={activeConv.model}
-                onChange={(e) => setModel(e.currentTarget.value)}
-                disabled={busy()}
-              >
-                <For each={AVAILABLE_MODELS}>
-                  {(m) => <option value={m}>{m}</option>}
-                </For>
-              </select>
+              <Show when={!IS_ARTIFACT}>
+                <select
+                  class="text-[11px] text-gray-300 font-mono bg-transparent border-none cursor-pointer outline-none p-0 hover:text-gray-400 disabled:opacity-50 disabled:cursor-default"
+                  value={activeConv.model}
+                  onChange={(e) => setModel(e.currentTarget.value)}
+                  disabled={busy()}
+                >
+                  <For each={AVAILABLE_MODELS}>
+                    {(m) => <option value={m}>{m}</option>}
+                  </For>
+                </select>
+              </Show>
             </div>
+            <Show when={!IS_ARTIFACT}>
             <div class="ml-auto flex items-center gap-3 flex-shrink-0 relative">
               <Show when={activeConv.usage}>
                 <span
@@ -330,6 +344,7 @@ const App: Component = () => {
                 </div>
               </Show>
             </div>
+            </Show>
           </header>
 
           <main ref={messagesRef} class="flex-1 overflow-y-auto py-6 px-5 flex flex-col gap-5">
@@ -395,7 +410,12 @@ const App: Component = () => {
                             fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit, previousAnswers: previousAnswers() })}
                           >
                             <ReplyBox>
-                              {agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit, previousAnswers: previousAnswers() })}
+                              <Show
+                                when={busy() && m.content === '' && index() === activeConv.messages.length - 1}
+                                fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit, previousAnswers: previousAnswers() })}
+                              >
+                                <span class="text-gray-400 text-sm italic" data-testid="thinking">{agent().name} is thinking…</span>
+                              </Show>
                             </ReplyBox>
                           </Show>
                         }
