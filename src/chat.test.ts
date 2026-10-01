@@ -860,6 +860,37 @@ describe('sendMessage', () => {
       expect(getConv().plans).toEqual(['# Plan\n1. Intro']);
     });
 
+    it('replaces the streamed content with the done message text when the done event carries a plan', async () => {
+      // The transport may have streamed text it later cleaned (e.g. a fence that slipped through);
+      // the done message is canonical whenever a plan was extracted.
+      const run = vi.fn(async function* () {
+        yield { type: 'text_delta' as const, text: 'Intro.\n```chalk-plan\n# P\n```\nBody.' };
+        yield {
+          type: 'done' as const,
+          message: { content: [{ type: 'text' as const, text: 'Intro.\nBody.' }], stop_reason: 'end_turn' },
+          plan: '# P',
+        };
+      });
+      const transport: Transport = { run, supportsImages: false, supportsTools: false };
+      const { getConv, setConv } = makeConvStore();
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, transport },
+      );
+      expect(getConv().messages[1].content).toBe('Intro.\nBody.');
+      expect(getConv().plans).toEqual(['# P']);
+    });
+
+    it('leaves streamed content alone when the done event carries no plan', async () => {
+      const transport = fakeTransport(['streamed ', 'text']);
+      const { getConv, setConv } = makeConvStore();
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, transport },
+      );
+      expect(getConv().messages[1].content).toBe('streamed text');
+    });
+
     it('prefers deps.transport over deps.client when both are supplied', async () => {
       const transport = fakeTransport(['via transport']);
       const client = fakeClient(() => makeStream(['via client'], makeFinalMessage()));

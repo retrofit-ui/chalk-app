@@ -99,6 +99,12 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
         }
       }
       if (!finalMsg) throw new Error('Transport ended without a final message.');
+      if (inlinePlan) {
+        // The transport extracted a lesson plan from the reply: its done message holds the
+        // cleaned text, which supersedes whatever streamed (a fence may have slipped through).
+        const cleaned = finalMsg.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
+        setConv('messages', assistantIdx, 'content', cleaned);
+      }
 
       // Usage is SDK-only; the artifact runtime reports nothing, so the cost UI simply stays empty.
       const u = finalMsg.usage;

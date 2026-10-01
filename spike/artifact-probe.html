@@ -1,102 +1,94 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Chalk artifact runtime probe</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Artifact runtime probe</title>
   <style>
-    body { font: 14px/1.5 ui-monospace, Menlo, monospace; margin: 2rem; color: #1a1a1a; }
-    h1 { font-size: 18px; font-weight: 600; }
-    pre { background: #f4f4f5; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-word; }
-    button { font: inherit; padding: 6px 12px; margin-right: 8px; cursor: pointer; }
-    .ok { color: #15803d; } .bad { color: #b91c1c; }
+    :root { --bg: #fff; --fg: #111; --muted: #666; --box: #f4f4f4; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #111; --fg: #eee; --muted: #aaa; --box: #222; } }
+    :root[data-theme="dark"] { --bg: #111; --fg: #eee; --muted: #aaa; --box: #222; }
+    body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; max-width: 48rem; margin-inline: auto; }
+    pre { background: var(--box); padding: 12px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+    button { margin: 4px 8px 4px 0; padding: 6px 12px; font: inherit; }
+    h2 { font-size: 1.1rem; margin-top: 1.5rem; }
+    .muted { color: var(--muted); }
   </style>
 </head>
 <body>
-  <h1>Chalk artifact runtime probe</h1>
-  <p>Answers Step 0 of the artifact-target plan: which runtime APIs does this artifact host expose?</p>
+  <h1>Artifact runtime probe</h1>
+  <p class="muted">Reports what this page can see of the host runtime. Expected on a Claude Code artifact: <code>window.claude</code> has only <code>use</code>; <code>use('sample')</code> resolves a function; <code>window.storage</code> is undefined; localStorage works. Button 2 spends a little of your own Claude usage and asks for consent first.</p>
 
-  <h2>Environment</h2>
-  <pre id="env">probing…</pre>
+  <h2>1. Static shape</h2>
+  <pre id="shape">collecting…</pre>
 
-  <h2>window.claude.complete</h2>
-  <button id="ping">1. complete('…PONG')</button>
-  <button id="rich">2. complete({messages:[…]}) — richer signature?</button>
-  <pre id="claude">not run</pre>
+  <h2>2. claude.use('sample')</h2>
+  <button id="ping">Send “Reply with the single word PONG”</button>
+  <pre id="sample">not run</pre>
 
-  <h2>window.storage</h2>
-  <button id="store">3. storage.set / storage.get round-trip</button>
+  <h2>3. Storage</h2>
+  <button id="store">localStorage round-trip</button>
   <pre id="storage">not run</pre>
 
   <script>
-    const $ = (id) => document.getElementById(id);
-    const show = (id, obj) => { $(id).textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2); };
+    var show = function (id, v) { document.getElementById(id).textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2); };
+    var safe = function (fn) { try { return fn(); } catch (e) { return 'threw ' + (e && e.name) + ': ' + (e && e.message); } };
+    var keysOf = function (o) { return o ? Object.getOwnPropertyNames(o).concat(Object.getOwnPropertyNames(Object.getPrototypeOf(o) || {})).filter(function (k) { return k !== 'constructor'; }) : null; };
 
-    function safe(fn) { try { return fn(); } catch (e) { return `THROWS: ${e && e.name}: ${e && e.message}`; } }
-    function keysDeep(o) {
-      if (!o) return null;
-      const own = Object.getOwnPropertyNames(o);
-      const proto = Object.getPrototypeOf(o);
-      const inherited = proto && proto !== Object.prototype ? Object.getOwnPropertyNames(proto) : [];
-      return { own, inherited };
-    }
-
-    show('env', {
-      href: location.href,
-      origin: location.origin,
-      isSecureContext,
-      inIframe: window.top !== window.self,
+    var shape = {
       'typeof window.claude': typeof window.claude,
-      'window.claude keys': keysDeep(window.claude),
-      'typeof window.claude?.complete': typeof (window.claude && window.claude.complete),
-      'complete.length (declared arity)': window.claude && window.claude.complete ? window.claude.complete.length : null,
-      'complete.toString()': window.claude && window.claude.complete ? safe(() => String(window.claude.complete).slice(0, 300)) : null,
-      'typeof window.storage': typeof window.storage,
-      'window.storage keys': keysDeep(window.storage),
-      localStorage: safe(() => { localStorage.setItem('probe', '1'); return 'works'; }),
-      sessionStorage: safe(() => { sessionStorage.setItem('probe', '1'); return 'works'; }),
-      indexedDB: safe(() => typeof indexedDB),
-      'crypto.randomUUID': safe(() => crypto.randomUUID()),
-      'fetch(same-origin) allowed?': 'see console after clicking 1',
-      userAgent: navigator.userAgent,
-    });
-
-    $('ping').onclick = async () => {
-      show('claude', 'calling…');
-      const t0 = performance.now();
-      try {
-        const r = await window.claude.complete('Reply with the single word PONG and nothing else.');
-        show('claude', { ok: true, ms: Math.round(performance.now() - t0), typeofResult: typeof r, result: r });
-      } catch (e) {
-        show('claude', { ok: false, error: `${e && e.name}: ${e && e.message}`, stack: e && e.stack });
-      }
+      'keys(window.claude)': keysOf(window.claude),
+      'typeof window.claude.use': typeof (window.claude && window.claude.use),
+      'typeof window.claude.complete (chat-artifact API)': typeof (window.claude && window.claude.complete),
+      'typeof window.storage (chat-artifact API)': typeof window.storage,
+      'location.origin': safe(function () { return location.origin; }),
+      'framed': safe(function () { return window.top !== window.self; }),
+      'localStorage readable': safe(function () { localStorage.getItem('probe'); return true; }),
     };
+    show('shape', shape);
 
-    $('rich').onclick = async () => {
-      show('claude', 'calling with object arg…');
+    (async function () {
+      if (!window.claude || typeof window.claude.use !== 'function') { shape['use(sample)'] = 'skipped: no use()'; show('shape', shape); return; }
+      var t0 = Date.now();
       try {
-        const r = await window.claude.complete({
-          system: 'You are a terse assistant.',
-          messages: [{ role: 'user', content: 'Reply with the single word PONG.' }],
+        var sample = await window.claude.use('sample');
+        shape['use(sample) resolved after ms'] = Date.now() - t0;
+        shape['use(sample) ->'] = sample === null ? 'null (capability not served/granted — was it published with capabilities: {sample: {}}?)' : typeof sample;
+        shape['keys(sample)'] = sample ? keysOf(sample) : null;
+        if (sample && typeof sample.limits === 'function') {
+          try { shape['sample.limits()'] = await sample.limits(); } catch (e) { shape['sample.limits()'] = 'rejected: ' + JSON.stringify(e); }
+        }
+        window.__sample = sample;
+      } catch (e) {
+        shape['use(sample) threw'] = String(e && e.message || e);
+      }
+      show('shape', shape);
+    })();
+
+    document.getElementById('ping').onclick = async function () {
+      var sample = window.__sample;
+      if (!sample) { show('sample', 'sample is not available (see section 1)'); return; }
+      show('sample', 'thinking… (consent dialog may appear)');
+      var t0 = Date.now(), firstText = null, calls = 0;
+      try {
+        var r = await sample('Reply with the single word PONG and nothing else.', {
+          cache: false,
+          onText: function (u) { calls++; if (firstText === null) firstText = Date.now() - t0; show('sample', 'streaming… ' + JSON.stringify(u)); },
         });
-        show('claude', { ok: true, note: 'object arg ACCEPTED — richer signature exists', typeofResult: typeof r, result: r });
+        show('sample', { ok: true, result: r, onTextCalls: calls, msToFirstText: firstText, msTotal: Date.now() - t0 });
       } catch (e) {
-        show('claude', { ok: false, note: 'object arg rejected — string-only API', error: `${e && e.name}: ${e && e.message}` });
+        show('sample', { ok: false, error: e, isError: e instanceof Error, msTotal: Date.now() - t0 });
       }
     };
 
-    $('store').onclick = async () => {
-      show('storage', 'running…');
-      try {
-        const s = window.storage;
-        if (!s) throw new Error('window.storage is undefined');
-        const key = 'chalk.probe';
-        const val = JSON.stringify({ t: Date.now() });
-        const setR = await s.set(key, val);
-        const getR = await s.get(key);
-        show('storage', { ok: true, setReturned: setR, getReturned: getR, roundTripEqual: getR === val || (getR && getR.value === val) });
-      } catch (e) {
-        show('storage', { ok: false, error: `${e && e.name}: ${e && e.message}` });
-      }
+    document.getElementById('store').onclick = function () {
+      var val = 'v' + Date.now();
+      show('storage', safe(function () {
+        localStorage.setItem('probe', val);
+        var back = localStorage.getItem('probe');
+        sessionStorage.setItem('probe', val);
+        return { localStorageRoundTrip: back === val, sessionStorageRoundTrip: sessionStorage.getItem('probe') === val };
+      }));
     };
   </script>
 </body>
