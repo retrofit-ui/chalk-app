@@ -1,95 +1,86 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Artifact runtime probe</title>
-  <style>
-    :root { --bg: #fff; --fg: #111; --muted: #666; --box: #f4f4f4; }
-    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #111; --fg: #eee; --muted: #aaa; --box: #222; } }
-    :root[data-theme="dark"] { --bg: #111; --fg: #eee; --muted: #aaa; --box: #222; }
-    body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; max-width: 48rem; margin-inline: auto; }
-    pre { background: var(--box); padding: 12px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
-    button { margin: 4px 8px 4px 0; padding: 6px 12px; font: inherit; }
-    h2 { font-size: 1.1rem; margin-top: 1.5rem; }
-    .muted { color: var(--muted); }
-  </style>
-</head>
-<body>
-  <h1>Artifact runtime probe</h1>
-  <p class="muted">Reports what this page can see of the host runtime. Expected on a Claude Code artifact: <code>window.claude</code> has only <code>use</code>; <code>use('sample')</code> resolves a function; <code>window.storage</code> is undefined; localStorage works. Button 2 spends a little of your own Claude usage and asks for consent first.</p>
+<title>Artifact runtime probe</title>
+<style>
+  :root { --bg: #fff; --fg: #111; --muted: #666; --box: #f4f4f4; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #111; --fg: #eee; --muted: #aaa; --box: #222; } }
+  :root[data-theme="dark"] { --bg: #111; --fg: #eee; --muted: #aaa; --box: #222; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; max-width: 48rem; margin-inline: auto; }
+  pre { background: var(--box); padding: 12px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+  button { margin: 4px 8px 4px 0; padding: 6px 12px; font: inherit; }
+  h2 { font-size: 1.1rem; margin-top: 1.5rem; }
+  .muted { color: var(--muted); }
+</style>
+<h1>Artifact runtime probe</h1>
+<p class="muted">Reports what this page can see of the host runtime. Expected on a Claude Code artifact: <code>window.claude</code> has only <code>use</code>; <code>use('sample')</code> resolves a function; <code>window.storage</code> is undefined; localStorage works. Button 2 spends a little of your own Claude usage and asks for consent first.</p>
 
-  <h2>1. Static shape</h2>
-  <pre id="shape">collecting…</pre>
+<h2>1. Static shape</h2>
+<pre id="shape">collecting…</pre>
 
-  <h2>2. claude.use('sample')</h2>
-  <button id="ping">Send “Reply with the single word PONG”</button>
-  <pre id="sample">not run</pre>
+<h2>2. claude.use('sample')</h2>
+<button id="ping">Send “Reply with the single word PONG”</button>
+<pre id="sample">not run</pre>
 
-  <h2>3. Storage</h2>
-  <button id="store">localStorage round-trip</button>
-  <pre id="storage">not run</pre>
+<h2>3. Storage</h2>
+<button id="store">localStorage round-trip</button>
+<pre id="storage">not run</pre>
 
-  <script>
-    var show = function (id, v) { document.getElementById(id).textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2); };
-    var safe = function (fn) { try { return fn(); } catch (e) { return 'threw ' + (e && e.name) + ': ' + (e && e.message); } };
-    var keysOf = function (o) { return o ? Object.getOwnPropertyNames(o).concat(Object.getOwnPropertyNames(Object.getPrototypeOf(o) || {})).filter(function (k) { return k !== 'constructor'; }) : null; };
+<script>
+  var show = function (id, v) { document.getElementById(id).textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2); };
+  var safe = function (fn) { try { return fn(); } catch (e) { return 'threw ' + (e && e.name) + ': ' + (e && e.message); } };
+  var keysOf = function (o) { return o ? Object.getOwnPropertyNames(o).concat(Object.getOwnPropertyNames(Object.getPrototypeOf(o) || {})).filter(function (k) { return k !== 'constructor'; }) : null; };
 
-    var shape = {
-      'typeof window.claude': typeof window.claude,
-      'keys(window.claude)': keysOf(window.claude),
-      'typeof window.claude.use': typeof (window.claude && window.claude.use),
-      'typeof window.claude.complete (chat-artifact API)': typeof (window.claude && window.claude.complete),
-      'typeof window.storage (chat-artifact API)': typeof window.storage,
-      'location.origin': safe(function () { return location.origin; }),
-      'framed': safe(function () { return window.top !== window.self; }),
-      'localStorage readable': safe(function () { localStorage.getItem('probe'); return true; }),
-    };
+  var shape = {
+    'typeof window.claude': typeof window.claude,
+    'keys(window.claude)': keysOf(window.claude),
+    'typeof window.claude.use': typeof (window.claude && window.claude.use),
+    'typeof window.claude.complete (chat-artifact API)': typeof (window.claude && window.claude.complete),
+    'typeof window.storage (chat-artifact API)': typeof window.storage,
+    'location.origin': safe(function () { return location.origin; }),
+    'framed': safe(function () { return window.top !== window.self; }),
+    'localStorage readable': safe(function () { localStorage.getItem('probe'); return true; }),
+  };
+  show('shape', shape);
+
+  (async function () {
+    if (!window.claude || typeof window.claude.use !== 'function') { shape['use(sample)'] = 'skipped: no use()'; show('shape', shape); return; }
+    var t0 = Date.now();
+    try {
+      var sample = await window.claude.use('sample');
+      shape['use(sample) resolved after ms'] = Date.now() - t0;
+      shape['use(sample) ->'] = sample === null ? 'null (capability not served/granted — was it published with capabilities: {sample: {}}?)' : typeof sample;
+      shape['keys(sample)'] = sample ? keysOf(sample) : null;
+      if (sample && typeof sample.limits === 'function') {
+        try { shape['sample.limits()'] = await sample.limits(); } catch (e) { shape['sample.limits()'] = 'rejected: ' + JSON.stringify(e); }
+      }
+      window.__sample = sample;
+    } catch (e) {
+      shape['use(sample) threw'] = String(e && e.message || e);
+    }
     show('shape', shape);
+  })();
 
-    (async function () {
-      if (!window.claude || typeof window.claude.use !== 'function') { shape['use(sample)'] = 'skipped: no use()'; show('shape', shape); return; }
-      var t0 = Date.now();
-      try {
-        var sample = await window.claude.use('sample');
-        shape['use(sample) resolved after ms'] = Date.now() - t0;
-        shape['use(sample) ->'] = sample === null ? 'null (capability not served/granted — was it published with capabilities: {sample: {}}?)' : typeof sample;
-        shape['keys(sample)'] = sample ? keysOf(sample) : null;
-        if (sample && typeof sample.limits === 'function') {
-          try { shape['sample.limits()'] = await sample.limits(); } catch (e) { shape['sample.limits()'] = 'rejected: ' + JSON.stringify(e); }
-        }
-        window.__sample = sample;
-      } catch (e) {
-        shape['use(sample) threw'] = String(e && e.message || e);
-      }
-      show('shape', shape);
-    })();
+  document.getElementById('ping').onclick = async function () {
+    var sample = window.__sample;
+    if (!sample) { show('sample', 'sample is not available (see section 1)'); return; }
+    show('sample', 'thinking… (consent dialog may appear)');
+    var t0 = Date.now(), firstText = null, calls = 0;
+    try {
+      var r = await sample('Reply with the single word PONG and nothing else.', {
+        cache: false,
+        onText: function (u) { calls++; if (firstText === null) firstText = Date.now() - t0; show('sample', 'streaming… ' + JSON.stringify(u)); },
+      });
+      show('sample', { ok: true, result: r, onTextCalls: calls, msToFirstText: firstText, msTotal: Date.now() - t0 });
+    } catch (e) {
+      show('sample', { ok: false, error: e, isError: e instanceof Error, msTotal: Date.now() - t0 });
+    }
+  };
 
-    document.getElementById('ping').onclick = async function () {
-      var sample = window.__sample;
-      if (!sample) { show('sample', 'sample is not available (see section 1)'); return; }
-      show('sample', 'thinking… (consent dialog may appear)');
-      var t0 = Date.now(), firstText = null, calls = 0;
-      try {
-        var r = await sample('Reply with the single word PONG and nothing else.', {
-          cache: false,
-          onText: function (u) { calls++; if (firstText === null) firstText = Date.now() - t0; show('sample', 'streaming… ' + JSON.stringify(u)); },
-        });
-        show('sample', { ok: true, result: r, onTextCalls: calls, msToFirstText: firstText, msTotal: Date.now() - t0 });
-      } catch (e) {
-        show('sample', { ok: false, error: e, isError: e instanceof Error, msTotal: Date.now() - t0 });
-      }
-    };
-
-    document.getElementById('store').onclick = function () {
-      var val = 'v' + Date.now();
-      show('storage', safe(function () {
-        localStorage.setItem('probe', val);
-        var back = localStorage.getItem('probe');
-        sessionStorage.setItem('probe', val);
-        return { localStorageRoundTrip: back === val, sessionStorageRoundTrip: sessionStorage.getItem('probe') === val };
-      }));
-    };
-  </script>
-</body>
-</html>
+  document.getElementById('store').onclick = function () {
+    var val = 'v' + Date.now();
+    show('storage', safe(function () {
+      localStorage.setItem('probe', val);
+      var back = localStorage.getItem('probe');
+      sessionStorage.setItem('probe', val);
+      return { localStorageRoundTrip: back === val, sessionStorageRoundTrip: sessionStorage.getItem('probe') === val };
+    }));
+  };
+</script>
