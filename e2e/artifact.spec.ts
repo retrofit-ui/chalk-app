@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
 import { ARTIFACT_FILE, mountArtifact, harnessEvents } from './helpers/artifactHarness';
-import { conversation, userMessage, assistantMessage, specFence, CONV_STORAGE, ACTIVE_ID_KEY } from './helpers/seed';
+import { specFence } from './helpers/seed';
 import * as K from './fixtures/kinds';
 
-// Layer 3: the published single-file build, inside a sandboxed iframe, against a stubbed
-// window.claude / window.storage runtime. Requires `pnpm build:artifact` to have run.
+// Layer 3: the published single-file build inside an iframe, against a stubbed
+// claude.use('sample') runtime. Requires `pnpm build:artifact` to have run.
 
 test.skip(!fs.existsSync(ARTIFACT_FILE), `${ARTIFACT_FILE} missing — run pnpm build:artifact first`);
 
@@ -14,101 +14,106 @@ const REPLY =
   specFence(K.matrix) +
   '\n```chalk-plan\n# Matrices\n1. Shape\n2. Multiplication\n```\n\nWhat do you notice about the rows?';
 
-test.describe('artifact build in a sandboxed iframe', () => {
-  test('boots without a key gate or model selector even though Web Storage throws', async ({ page }) => {
+async function send(app: Awaited<ReturnType<typeof mountArtifact>>, text: string) {
+  await app.getByTestId('composer-input').fill(text);
+  await app.getByTestId('composer-send').click();
+}
+
+test.describe('artifact build against the sample runtime', () => {
+  test('boots without a key gate or model selector, with Web Storage available on its own origin', async ({ page }) => {
     const app = await mountArtifact(page, { replies: [REPLY] });
 
     await expect(app.getByTestId('composer-input')).toBeVisible();
     await expect(app.getByTestId('keygate-input')).toHaveCount(0);
     await expect(app.locator('option[value="claude-sonnet-4-6"]')).toHaveCount(0);
-    // The agent picker is still there.
     await expect(app.locator('option[value="ada"]')).toHaveCount(1);
 
     const { storageProbe } = await harnessEvents(page);
-    expect(storageProbe).toEqual({ localStorage: 'throws', sessionStorage: 'throws' });
+    expect(storageProbe).toEqual({ localStorage: 'works', sessionStorage: 'works' });
   });
 
-  test('a turn goes through window.claude.complete, renders the spec and files the plan', async ({ page }) => {
-    const app = await mountArtifact(page, { replies: [REPLY], replyDelayMs: 600 });
+  test('a turn streams through sample(): thinking, then partial text, then the spec and the plan', async ({ page }) => {
+    const app = await mountArtifact(page, { replies: [REPLY], replyDelayMs: 500, chunks: 4 });
 
-    await app.getByTestId('composer-input').fill('show me a matrix');
-    await app.getByTestId('composer-send').click();
-
-    // No streaming in this runtime: the pending bubble must say something.
+    await send(app, 'show me a matrix');
     await expect(app.getByTestId('thinking')).toBeVisible();
 
+    // Streaming: the opening words land before the closing question does.
     await expect(app.getByText('Here is the matrix:')).toBeVisible();
-    await expect(app.locator('[data-kind="chalk-matrix"] .font-mono')).toHaveCount(6);
+    await expect(app.getByText('What do you notice about the rows?')).toHaveCount(0);
+
     await expect(app.getByText('What do you notice about the rows?')).toBeVisible();
-    // The plan is extracted into the side panel, not rendered inline.
+    await expect(app.locator('[data-kind="chalk-matrix"] .font-mono')).toHaveCount(6);
+    // The plan went to the side panel, not the bubble.
+    await expect(app.getByTestId('message').getByText('chalk-plan')).toHaveCount(0);
     await expect(app.getByTestId('message').getByText('# Matrices')).toHaveCount(0);
     await expect(app.locator('header').getByTitle('View lesson plan')).toHaveText('ⓘ');
     await app.locator('header').getByTitle('View lesson plan').click();
     await expect(app.getByText('Multiplication')).toBeVisible();
 
-    const { prompts } = await harnessEvents(page);
-    expect(prompts).toHaveLength(1);
-    expect(prompts[0]).toContain('You are Ada');
-    expect(prompts[0]).toContain('```chalk-plan');        // inline prompt, not the tool prompt
-    expect(prompts[0]).not.toContain('set_lesson_plan');
-    expect(prompts[0]).toContain('### User\nshow me a matrix');
-    expect(prompts[0].trimEnd().endsWith('### Assistant')).toBe(true);
+    const { calls } = await harnessEvents(page);
+    expect(calls).toHaveLength(1);
+    const turns = calls[0].input;
+    expect(Array.isArray(turns)).toBe(true);
+    if (!Array.isArray(turns)) return;
+    // Inline prompt as the leading user turn: no system role, no tool-based instructions.
+    expect(turns[0].role).toBe('user');
+    expect(turns[0].content).toContain('You are Ada');
+    expect(turns[0].content).toContain('```chalk-plan');
+    expect(turns[0].content).not.toContain('set_lesson_plan');
+    expect(turns[turns.length - 1]).toEqual({ role: 'user', content: 'show me a matrix' });
+    expect(calls[0].options).toEqual({ cache: false, hasOnText: true });
   });
 
-  test('the second turn replays the first exchange in the prompt', async ({ page }) => {
+  test('the second turn replays the first exchange as turns', async ({ page }) => {
     const app = await mountArtifact(page, { replies: ['First answer.', 'Second answer.'] });
 
-    await app.getByTestId('composer-input').fill('one');
-    await app.getByTestId('composer-send').click();
+    await send(app, 'one');
     await expect(app.getByText('First answer.')).toBeVisible();
-
-    await app.getByTestId('composer-input').fill('two');
-    await app.getByTestId('composer-send').click();
+    await send(app, 'two');
     await expect(app.getByText('Second answer.')).toBeVisible();
 
-    const { prompts } = await harnessEvents(page);
-    expect(prompts).toHaveLength(2);
-    expect(prompts[1]).toContain('### User\none\n\n### Assistant\nFirst answer.\n\n### User\ntwo');
+    const { calls } = await harnessEvents(page);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].input).toEqual([
+      expect.objectContaining({ role: 'user' }), // instructions
+      { role: 'user', content: 'one' },
+      { role: 'assistant', content: 'First answer.' },
+      { role: 'user', content: 'two' },
+    ]);
   });
 
-  test('conversations are written through to window.storage', async ({ page }) => {
+  test('a reload restores the conversation from localStorage', async ({ page }) => {
     const app = await mountArtifact(page, { replies: ['Noted.'] });
-
-    await app.getByTestId('composer-input').fill('remember this');
-    await app.getByTestId('composer-send').click();
+    await send(app, 'remember this');
     await expect(app.getByText('Noted.')).toBeVisible();
 
-    const { storageWrites } = await harnessEvents(page);
-    const convWrites = storageWrites.filter((w) => w.key === CONV_STORAGE);
-    expect(convWrites.length).toBeGreaterThan(0);
-    const last = JSON.parse(convWrites[convWrites.length - 1].value) as Record<string, { messages: Array<{ content: unknown }> }>;
-    const [conv] = Object.values(last);
-    expect(conv.messages.map((m) => m.content)).toEqual(['remember this', 'Noted.']);
-    expect(storageWrites.some((w) => w.key === ACTIVE_ID_KEY)).toBe(true);
+    await page.reload();
+    const again = page.frameLocator('#artifact');
+    await expect(again.getByTestId('message').getByText('remember this')).toBeVisible();
+    await expect(again.getByTestId('message').getByText('Noted.')).toBeVisible();
+    expect((await harnessEvents(page)).calls).toHaveLength(0);
   });
 
-  test('a conversation already in window.storage is shown on boot', async ({ page }) => {
-    const conv = conversation('seeded', [userMessage('earlier question'), assistantMessage('earlier answer')], {
-      title: 'Seeded chat',
-    });
-    const app = await mountArtifact(page, {
-      replies: ['x'],
-      storage: {
-        [CONV_STORAGE]: JSON.stringify({ [conv.id]: conv }),
-        [ACTIVE_ID_KEY]: conv.id,
-      },
-    });
+  test('still completes a turn when the frame has no origin and Web Storage throws', async ({ page }) => {
+    const app = await mountArtifact(page, { replies: ['Fine without storage.'], sandbox: 'opaque' });
+    expect((await harnessEvents(page)).storageProbe).toEqual({ localStorage: 'throws', sessionStorage: 'throws' });
 
-    await expect(app.getByText('earlier question')).toBeVisible();
-    await expect(app.getByText('earlier answer')).toBeVisible();
-    await expect(app.locator('header').getByText('Seeded chat')).toBeVisible();
-  });
-
-  test('still works, in memory only, when the host has no window.storage', async ({ page }) => {
-    const app = await mountArtifact(page, { replies: ['Fine without storage.'], withoutStorage: true });
-
-    await app.getByTestId('composer-input').fill('hello');
-    await app.getByTestId('composer-send').click();
+    await send(app, 'hello');
     await expect(app.getByText('Fine without storage.')).toBeVisible();
+  });
+
+  test('a declined consent shows a readable error and keeps the composer usable', async ({ page }) => {
+    const app = await mountArtifact(page, { replies: [], reject: { code: 'not_granted', message: 'dev text' } });
+    await send(app, 'hello');
+    await expect(app.getByText('You have not allowed this artifact to use Claude', { exact: false })).toBeVisible();
+    await expect(app.getByTestId('composer-input')).toBeEnabled();
+  });
+
+  test('a truncated answer carries the truncated badge', async ({ page }) => {
+    const app = await mountArtifact(page, { replies: ['Half an ans'], truncated: true });
+    await send(app, 'hello');
+    await expect(app.getByText('Half an ans')).toBeVisible();
+    await expect(app.getByText('⚠ truncated')).toBeVisible();
   });
 });
