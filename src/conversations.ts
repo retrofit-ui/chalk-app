@@ -1,5 +1,6 @@
 import { DEFAULT_MODEL } from './anthropic';
 import type { ChatMessage, Usage } from './anthropic';
+import { local, session, STORAGE_KEYS } from './storage';
 
 export type Conversation = {
   id: string;
@@ -17,8 +18,8 @@ export type Conversation = {
   };
 };
 
-const CONV_STORAGE = 'chalk.conversations';
-const ACTIVE_ID_KEY = 'chalk.activeConvId';
+const CONV_STORAGE = STORAGE_KEYS.conversations;
+const ACTIVE_ID_KEY = STORAGE_KEYS.activeId;
 
 function normalize(conv: Conversation): Conversation {
   return {
@@ -35,7 +36,7 @@ function normalize(conv: Conversation): Conversation {
 
 function loadAll(): Record<string, Conversation> {
   try {
-    const raw = localStorage.getItem(CONV_STORAGE);
+    const raw = local.getItem(CONV_STORAGE);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return {};
@@ -50,7 +51,7 @@ function loadAll(): Record<string, Conversation> {
 }
 
 function saveAll(all: Record<string, Conversation>): void {
-  localStorage.setItem(CONV_STORAGE, JSON.stringify(all));
+  local.setItem(CONV_STORAGE, JSON.stringify(all));
 }
 
 export function getAllConversations(): Conversation[] {
@@ -134,15 +135,15 @@ export function deriveTitle(messages: ChatMessage[]): string {
 }
 
 export function getActiveId(): string | null {
-  return sessionStorage.getItem(ACTIVE_ID_KEY);
+  return session.getItem(ACTIVE_ID_KEY);
 }
 
 export function setActiveId(id: string): void {
-  sessionStorage.setItem(ACTIVE_ID_KEY, id);
+  session.setItem(ACTIVE_ID_KEY, id);
 }
 
 export function clearActiveId(): void {
-  sessionStorage.removeItem(ACTIVE_ID_KEY);
+  session.removeItem(ACTIVE_ID_KEY);
 }
 
 export type DateGroup = 'Today' | 'Yesterday' | 'Last 7 days' | 'Last 30 days' | 'Older';

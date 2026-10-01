@@ -1,10 +1,14 @@
 /* @refresh reload */
 import { render } from 'solid-js/web';
-import 'solid-devtools';
 import 'katex/dist/katex.min.css';
 
 import { configureMarked } from '@retrofit-ui/spa-solid-shoelace/components';
 import markedKatex from 'marked-katex-extension';
+
+if (import.meta.env.DEV) {
+  // Dev-only: keeps the devtools bridge (and its global) out of both production bundles.
+  await import('solid-devtools');
+}
 
 configureMarked(markedKatex({ throwOnError: false, output: 'html' }));
 

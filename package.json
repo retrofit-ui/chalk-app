@@ -7,6 +7,7 @@
     "start": "vite",
     "dev": "vite",
     "build": "vite build",
+    "build:artifact": "vite build --mode artifact",
     "serve": "vite preview",
     "test": "vitest run",
     "test:ui": "vitest --ui",
@@ -24,6 +25,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2",
     "vite": "^7.1.4",
+    "vite-plugin-singlefile": "^2.3.3",
     "vite-plugin-solid": "^2.11.8",
     "vitest": "^4.1.9"
   },
