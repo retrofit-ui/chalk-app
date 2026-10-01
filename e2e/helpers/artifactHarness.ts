@@ -102,10 +102,16 @@ function harnessPage(sandbox: HarnessOptions['sandbox']): string {
 </body></html>`;
 }
 
+// The published artifact is wrapped in the platform's document skeleton; this mirrors it
+// (charset, viewport, the small reset) and adds the runtime stub before the page content.
+function wrapLikePublish(fragment: string, stub: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif;background:#fafaf9}img{max-width:100%}[hidden]{display:none!important}</style><script>${stub}</script></head><body>${fragment}</body></html>`;
+}
+
 export async function mountArtifact(page: Page, opts: HarnessOptions): Promise<FrameLocator> {
-  const html = fs.readFileSync(ARTIFACT_FILE, 'utf8');
-  const body = html.replace('<head>', `<head><script>${runtimeStub(opts)}</script>`);
-  if (body === html) throw new Error('chalk.html has no <head> to inject the runtime stub into');
+  const fragment = fs.readFileSync(ARTIFACT_FILE, 'utf8');
+  if (!fragment.trimStart().startsWith('<title>')) throw new Error('chalk.html should be page content starting with <title>, without a document skeleton');
+  const body = wrapLikePublish(fragment, runtimeStub(opts));
 
   await page.route(`**${FRAME_URL}`, (route) => route.fulfill({ contentType: 'text/html', body }));
   await page.route(`**${HARNESS_URL}`, (route) => route.fulfill({ contentType: 'text/html', body: harnessPage(opts.sandbox) }));

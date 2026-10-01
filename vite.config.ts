@@ -5,6 +5,7 @@ import solidPlugin from 'vite-plugin-solid';
 import devtools from 'solid-devtools/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
+import { toArtifactFragment } from './build/artifactFragment';
 
 const localShoelace = path.resolve(
   __dirname,
@@ -15,7 +16,9 @@ const localShoelace = path.resolve(
 //   `vite build`                 → dist/          multi-file SPA for GitHub Pages
 //   `vite build --mode artifact` → dist-artifact/ one self-contained chalk.html for
 //                                  publishing as a Claude artifact (.env.artifact sets
-//                                  VITE_TARGET=artifact, which src/target.ts reads).
+//                                  VITE_TARGET=artifact, which src/target.ts reads). The
+//                                  file is page content without a document skeleton,
+//                                  which is what the artifact publish expects.
 export default defineConfig(({ mode }) => {
   const artifact = mode === 'artifact';
 
@@ -76,25 +79,22 @@ export default defineConfig(({ mode }) => {
   };
 });
 
-// What vite-plugin-singlefile leaves undone: `<link href>` assets referenced from index.html
-// (the favicon) are not inlined, and the output is named index.html. Runs after singlefile.
+// What vite-plugin-singlefile leaves undone: the Claude artifact publish wraps the file in its
+// own document skeleton, so the output is reduced to page content (see build/artifactFragment),
+// stray sibling files are dropped, and the result is named chalk.html. Runs after singlefile.
 function singleFileExtras(): PluginOption {
-  const favicon = path.resolve(__dirname, 'src/assets/favicon.svg');
   return {
     name: 'chalk:singlefile-extras',
     apply: 'build',
     enforce: 'post',
-    transformIndexHtml: {
-      order: 'post',
-      handler(html) {
-        const dataUri = `data:image/svg+xml;base64,${fs.readFileSync(favicon).toString('base64')}`;
-        return html.replace(/<link rel="icon"[^>]*href="[^"]*"/, (tag) => tag.replace(/href="[^"]*"/, `href="${dataUri}"`));
-      },
-    },
     generateBundle(_, bundle) {
-      // Everything else is now inside the HTML; a stray file would silently fail to load in the sandbox.
-      for (const name of Object.keys(bundle)) {
-        if (!name.endsWith('.html')) delete bundle[name];
+      for (const [name, entry] of Object.entries(bundle)) {
+        if (name.endsWith('.html') && entry.type === 'asset' && typeof entry.source === 'string') {
+          entry.source = toArtifactFragment(entry.source);
+        } else {
+          // Everything is inside the HTML now; a stray file would silently fail to load in the sandbox.
+          delete bundle[name];
+        }
       }
     },
     closeBundle() {

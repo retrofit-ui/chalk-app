@@ -44,6 +44,9 @@ API key, no backend.
 pnpm build:artifact   # → dist-artifact/chalk.html, one self-contained file (~4 MB)
 ```
 
+The file is page content (title, stylesheet, app, script) without a document skeleton,
+because the artifact publish wraps it in its own. It is not meant to be opened from disk.
+
 Then, from an interactive Claude Code session that is logged in (`/login`):
 
 > publish dist-artifact/chalk.html as an artifact titled Chalk, with the `sample` capability
