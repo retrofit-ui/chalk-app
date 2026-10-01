@@ -30,6 +30,15 @@ viewer confirm the same thing empirically.
   capability declared. Republish to the same URL for updates.
 - The old fallback (npm bundle + CDN shell inside a chat artifact) is unnecessary.
 
+## Publishing note
+
+Publishing must declare the capability. A remote (cloud) Claude Code session refused it on
+2026-10-01 with "the review page capabilities declaration carries unknown capability families
+— only `mcp` and the artifact-publish capability have review-page meaning", so publish from an
+interactive, logged-in session:
+
+> publish dist-artifact/chalk.html as an artifact titled Chalk with capabilities {sample: {}}
+
 ## Live confirmation
 
 - [ ] Opened the published Chalk artifact, allowed Claude on the first send, saw a reply stream
