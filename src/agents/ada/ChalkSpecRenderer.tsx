@@ -1,4 +1,19 @@
-import { type Component, createContext, For, Match, Show, Switch, useContext } from 'solid-js';
+import {
+  type Component,
+  type JSX,
+  createContext,
+  createMemo,
+  createSignal,
+  ErrorBoundary,
+  For,
+  Index,
+  Match,
+  onMount,
+  Show,
+  Switch,
+  untrack,
+  useContext,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { SpecRenderer } from '@retrofit-ui/spa-solid-shoelace/components';
 import type { RootSpec } from '@retrofit-ui/core';
@@ -29,6 +44,8 @@ import AutomatonView from './statemachines/AutomatonView';
 import SearchView from './statemachines/SearchView';
 import MarkovView from './statemachines/MarkovView';
 import MdpView from './statemachines/MdpView';
+import { isIncomplete } from './partialJson';
+import { SpecPlaceholder, SpecRenderError } from './SpecPlaceholder';
 
 type ViewNodeProps = {
   spec: { kind: string } & Record<string, unknown>;
@@ -55,7 +72,7 @@ function collectAnswerBoxIdentifiers(nodes: ViewNodeProps['spec'][], out: string
   return out;
 }
 
-const ViewNode: Component<ViewNodeProps> = (props) => {
+const LeafView: Component<ViewNodeProps> = (props) => {
   return (
     <Switch>
       <Match when={props.spec.kind === 'chalk-graph'}>
@@ -93,60 +110,6 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
       </Match>
       <Match when={props.spec.kind === 'chalk-mdp'}>
         <MdpView spec={props.spec as unknown as ChalkMdpSpec} />
-      </Match>
-      <Match when={props.spec.kind === 'flex'}>
-        <div
-          data-kind="flex"
-          class="flex data-[direction=row]:*:flex-1 data-[direction=row]:*:min-w-0"
-          data-direction={(props.spec.direction as string) ?? 'column'}
-          style={{
-            'flex-direction': (props.spec.direction as string) ?? 'column',
-            gap: (props.spec.gap as string) ?? '0.75rem',
-            'align-items': props.spec.align as string | undefined,
-            'justify-content': props.spec.justify as string | undefined,
-            'flex-wrap': props.spec.wrap ? 'wrap' : undefined,
-          }}
-        >
-          <For each={props.spec.children as ViewNodeProps['spec'][]}>
-            {(child) => (
-              <ViewNode spec={child} onGraphClick={props.onGraphClick} onDrawSubmit={props.onDrawSubmit} />
-            )}
-          </For>
-        </div>
-      </Match>
-      <Match when={props.spec.kind === 'grid'}>
-        <div
-          data-kind="grid"
-          class="grid *:min-w-0"
-          style={{
-            'grid-template-columns':
-              (props.spec.columnTemplate as string) ??
-              `repeat(${(props.spec.columns as number) ?? 2}, 1fr)`,
-            gap: (props.spec.gap as string) ?? '0.75rem',
-            'align-items': props.spec.align as string | undefined,
-            'justify-content': props.spec.justify as string | undefined,
-          }}
-        >
-          <For each={props.spec.children as ViewNodeProps['spec'][]}>
-            {(child) => (
-              <ViewNode spec={child} onGraphClick={props.onGraphClick} onDrawSubmit={props.onDrawSubmit} />
-            )}
-          </For>
-        </div>
-      </Match>
-      <Match when={props.spec.kind === 'card'}>
-        <div data-kind="card" class="border border-slate-200 rounded-lg bg-white overflow-hidden">
-          <Show when={props.spec.header as string | undefined}>
-            <div class="py-2 px-3 border-b border-slate-200 bg-slate-50 font-semibold text-sm text-slate-700">{props.spec.header as string}</div>
-          </Show>
-          <div class="p-3 flex flex-col gap-2">
-            <For each={props.spec.children as ViewNodeProps['spec'][]}>
-              {(child) => (
-                <ViewNode spec={child} onGraphClick={props.onGraphClick} onDrawSubmit={props.onDrawSubmit} />
-              )}
-            </For>
-          </div>
-        </div>
       </Match>
       <Match when={props.spec.kind === 'text'}>
         <div
@@ -213,11 +176,130 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
   );
 };
 
+/**
+ * Renders one node of a reply. Layout containers (flex, grid, card) render
+ * live, so their children can stream in one by one. Every other node is a
+ * leaf, drawn by LeafNode from a frozen snapshot of its spec.
+ */
+const ViewNode: Component<ViewNodeProps> = (props) => {
+  return (
+    <Switch fallback={<LeafNode spec={props.spec} onGraphClick={props.onGraphClick} onDrawSubmit={props.onDrawSubmit} />}>
+      <Match when={typeof props.spec.kind !== 'string'}>
+        <Show when={isIncomplete(props.spec)} fallback={<SpecRenderError error={undefined} />}>
+          <SpecPlaceholder />
+        </Show>
+      </Match>
+      <Match when={props.spec.kind === 'flex'}>
+        <div
+          data-kind="flex"
+          class="flex data-[direction=row]:*:flex-1 data-[direction=row]:*:min-w-0"
+          data-direction={(props.spec.direction as string) ?? 'column'}
+          style={{
+            'flex-direction': (props.spec.direction as string) ?? 'column',
+            gap: (props.spec.gap as string) ?? '0.75rem',
+            'align-items': props.spec.align as string | undefined,
+            'justify-content': props.spec.justify as string | undefined,
+            'flex-wrap': props.spec.wrap ? 'wrap' : undefined,
+          }}
+        >
+          <Index each={(props.spec.children as ViewNodeProps['spec'][] | undefined) ?? []}>
+            {(child) => (
+              <ViewNode spec={child()} onGraphClick={props.onGraphClick} onDrawSubmit={props.onDrawSubmit} />
+            )}
+          </Index>
+        </div>
+      </Match>
+      <Match when={props.spec.kind === 'grid'}>
+        <div
+          data-kind="grid"
+          class="grid *:min-w-0"
+          style={{
+            'grid-template-columns':
+              (props.spec.columnTemplate as string) ??
+              `repeat(${(props.spec.columns as number) ?? 2}, 1fr)`,
+            gap: (props.spec.gap as string) ?? '0.75rem',
+            'align-items': props.spec.align as string | undefined,
+            'justify-content': props.spec.justify as string | undefined,
+          }}
+        >
+          <Index each={(props.spec.children as ViewNodeProps['spec'][] | undefined) ?? []}>
+            {(child) => (
+              <ViewNode spec={child()} onGraphClick={props.onGraphClick} onDrawSubmit={props.onDrawSubmit} />
+            )}
+          </Index>
+        </div>
+      </Match>
+      <Match when={props.spec.kind === 'card'}>
+        <div data-kind="card" class="border border-slate-200 rounded-lg bg-white overflow-hidden">
+          <Show when={props.spec.header as string | undefined}>
+            <div class="py-2 px-3 border-b border-slate-200 bg-slate-50 font-semibold text-sm text-slate-700">{props.spec.header as string}</div>
+          </Show>
+          <div class="p-3 flex flex-col gap-2">
+            <Index each={(props.spec.children as ViewNodeProps['spec'][] | undefined) ?? []}>
+              {(child) => (
+                <ViewNode spec={child()} onGraphClick={props.onGraphClick} onDrawSubmit={props.onDrawSubmit} />
+              )}
+            </Index>
+          </div>
+        </div>
+      </Match>
+    </Switch>
+  );
+};
+
+/**
+ * Draws a leaf spec, which may be a partial one still streaming in.
+ *
+ * - The component is remounted only when the leaf's own data changes (keyed by
+ *   its JSON), so finished leaves stay mounted while the rest of the reply
+ *   streams, and components that read their spec once at mount still update.
+ * - If the component throws on a partial spec, the last snapshot that drew
+ *   successfully is shown instead, or a placeholder if there is none yet.
+ * - If it throws on a finished spec, the error is shown: that won't fix itself.
+ */
+const LeafNode: Component<ViewNodeProps> = (props) => {
+  const json = createMemo(() => JSON.stringify(props.spec));
+  const partial = () => isIncomplete(props.spec);
+  const [lastGood, setLastGood] = createSignal<string>();
+  const draw = (snapshot: string) => (
+    <LeafView spec={JSON.parse(snapshot)} onGraphClick={props.onGraphClick} onDrawSubmit={props.onDrawSubmit} />
+  );
+
+  return (
+    <Show when={json()} keyed>
+      {(snapshot) => (
+        <ErrorBoundary
+          fallback={(error) => (
+            <Show when={partial()} fallback={<SpecRenderError kind={props.spec.kind} error={error} />}>
+              {(() => {
+                const previous = untrack(lastGood);
+                if (previous === undefined || previous === snapshot) return <SpecPlaceholder kind={props.spec.kind} />;
+                return <ErrorBoundary fallback={<SpecPlaceholder kind={props.spec.kind} />}>{draw(previous)}</ErrorBoundary>;
+              })()}
+            </Show>
+          )}
+        >
+          <Drawn render={() => draw(snapshot)} onDrawn={() => setLastGood(snapshot)} />
+        </ErrorBoundary>
+      )}
+    </Show>
+  );
+};
+
+/** Calls `onDrawn` once `render` has mounted without throwing. */
+const Drawn: Component<{ render: () => JSX.Element; onDrawn: () => void }> = (props) => {
+  const element = props.render();
+  onMount(props.onDrawn);
+  return element;
+};
+
 const ChalkSpecRenderer: Component<{
   chunks: ChalkViewSpec[];
   onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
   onDrawSubmit?: (imageBase64: string) => void;
   onAnswerSubmit?: (answers: Record<string, string>) => void;
+  /** The reply is still arriving: answerbox ids may be incomplete, so hold Submit back. */
+  streaming?: boolean;
 }> = (props) => {
   const [answers, setAnswers] = createStore<Record<string, string>>({});
   const answerContext: AnswerContextValue = {
@@ -231,16 +313,16 @@ const ChalkSpecRenderer: Component<{
   return (
     <AnswerContext.Provider value={answerContext}>
       <div class="flex flex-col gap-2">
-        <For each={props.chunks}>
+        <Index each={props.chunks}>
           {(chunk) => (
             <ViewNode
-              spec={chunk as ViewNodeProps['spec']}
+              spec={chunk() as ViewNodeProps['spec']}
               onGraphClick={props.onGraphClick}
               onDrawSubmit={props.onDrawSubmit}
             />
           )}
-        </For>
-        <Show when={identifiers().length > 0}>
+        </Index>
+        <Show when={!props.streaming && identifiers().length > 0}>
           <button
             data-testid="answerbox-submit"
             class="self-start text-xs py-1.5 px-3.5 border-none rounded bg-blue-600 text-white cursor-pointer font-medium hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed"

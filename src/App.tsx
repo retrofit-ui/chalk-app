@@ -339,6 +339,7 @@ const App: Component = () => {
             <For each={activeConv.messages} keyed>
               {(m, index) => {
                 const showDebug = () => debugIds().has(m.id) && Boolean(m.debug);
+                const streaming = () => busy() && index() === activeConv.messages.length - 1;
                 const previousAnswers = () =>
                   m.kind === 'answer-submit'
                     ? findPreviousAnswers(activeConv.messages, index())
@@ -392,10 +393,10 @@ const App: Component = () => {
                         fallback={
                           <Show
                             when={m.role === 'assistant'}
-                            fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit, previousAnswers: previousAnswers() })}
+                            fallback={agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit, previousAnswers: previousAnswers(), get streaming() { return streaming(); } })}
                           >
                             <ReplyBox>
-                              {agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit, previousAnswers: previousAnswers() })}
+                              {agent().Harness({ message: m, onGraphClick, onDrawSubmit, onAnswerSubmit, previousAnswers: previousAnswers(), get streaming() { return streaming(); } })}
                             </ReplyBox>
                           </Show>
                         }

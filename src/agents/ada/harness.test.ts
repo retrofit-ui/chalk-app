@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { findPreviousAnswers, parseChunks } from './chunkParser';
+import { isIncomplete } from './partialJson';
 import type { ChatMessage } from '../../anthropic';
 
 function fence(spec: unknown): string {
@@ -214,6 +215,52 @@ describe('parseChunks', () => {
       expect(chunks[0]).toEqual({ kind: 'markdown', content: 'Preamble here.\n' });
       expect((chunks[1] as { content: string }).content).toContain('Truncated `chalk-spec` block');
     });
+  });
+});
+
+describe('parseChunks while streaming', () => {
+  const flexOpen =
+    'Look:\n```chalk-spec\n{"kind":"flex","direction":"row","children":[{"kind":"text","content":"done"},{"kind":"chalk-gr';
+
+  it('renders an open fence as an incomplete spec, not a truncation warning', () => {
+    const chunks = parseChunks(flexOpen, { streaming: true });
+    expect(chunks).toEqual([
+      { kind: 'markdown', content: 'Look:\n' },
+      { kind: 'flex', direction: 'row', children: [{ kind: 'text', content: 'done' }, {}] },
+    ]);
+    const flex = chunks[1] as { children: object[] };
+    expect(isIncomplete(flex)).toBe(true);
+    expect(isIncomplete(flex.children[0])).toBe(false);
+    expect(isIncomplete(flex.children[1])).toBe(true);
+  });
+
+  it('still shows the truncation warning for the same text once streaming has stopped', () => {
+    expect((parseChunks(flexOpen)[1] as { content: string }).content).toContain('Truncated `chalk-spec` block');
+    expect((parseChunks(flexOpen, { streaming: false })[1] as { content: string }).content).toContain(
+      'Truncated `chalk-spec` block',
+    );
+  });
+
+  it('emits an empty incomplete node (a placeholder) when the fence has just opened', () => {
+    const chunks = parseChunks('Hi\n```chalk-spec\n', { streaming: true });
+    expect(chunks[1]).toEqual({});
+    expect(isIncomplete(chunks[1])).toBe(true);
+  });
+
+  it('shows a malformed open fence raw, like a malformed closed one', () => {
+    const chunks = parseChunks('```chalk-spec\n{kind: oops', { streaming: true });
+    expect(chunks).toEqual([{ kind: 'markdown', content: '```\n{kind: oops\n```' }]);
+  });
+
+  it('hides a half-arrived fence opener instead of flashing it as text', () => {
+    expect(parseChunks('Here:\n```chalk-sp', { streaming: true })).toEqual([{ kind: 'markdown', content: 'Here:\n' }]);
+    expect(parseChunks('Here:\n```chalk-sp')).toEqual([{ kind: 'markdown', content: 'Here:\n```chalk-sp' }]);
+  });
+
+  it('parses closed fences with JSON.parse as before, leaving them complete', () => {
+    const chunks = parseChunks(fence({ kind: 'text', content: 'a' }) + '\nmore', { streaming: true });
+    expect(chunks).toEqual([{ kind: 'text', content: 'a' }, { kind: 'markdown', content: '\nmore' }]);
+    expect(isIncomplete(chunks[0])).toBe(false);
   });
 });
 

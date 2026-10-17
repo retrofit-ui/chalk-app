@@ -150,3 +150,78 @@ export function messageText(m: { content: unknown }): string {
   }
   return '';
 }
+
+/**
+ * A reply the test feeds by hand, so it can assert on what the UI shows
+ * mid-stream. route.fulfill() can only send a whole body at once, so this
+ * swaps in a fetch that answers POST /v1/messages with a ReadableStream the
+ * test pushes SSE events into. Only the first request is held this way.
+ */
+export type HeldStream = {
+  /** Resolves once the app has sent its request and the stream is open. */
+  opened: () => Promise<void>;
+  /** Streams `text` as text_delta events, `size` characters at a time. */
+  sendText: (text: string, size?: number) => Promise<void>;
+  /** Sends message_delta/message_stop and closes the stream. */
+  finish: (stopReason?: StopReason) => Promise<void>;
+};
+
+export async function holdAnthropicStream(page: Page): Promise<HeldStream> {
+  await page.addInitScript(() => {
+    const realFetch = window.fetch.bind(window);
+    const w = window as unknown as { __heldSse?: ReadableStreamDefaultController<Uint8Array> };
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/v1/messages') && init?.method === 'POST' && !w.__heldSse) {
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            w.__heldSse = controller;
+          },
+        });
+        return Promise.resolve(new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } }));
+      }
+      return realFetch(input, init);
+    };
+  });
+
+  const push = (s: string) =>
+    page.evaluate((s) => {
+      const w = window as unknown as { __heldSse: ReadableStreamDefaultController<Uint8Array> };
+      w.__heldSse.enqueue(new TextEncoder().encode(s));
+    }, s);
+
+  return {
+    opened: async () => {
+      await page.waitForFunction(() => Boolean((window as unknown as { __heldSse?: unknown }).__heldSse));
+      await push(
+        event('message_start', {
+          type: 'message_start',
+          message: {
+            id: 'msg_held',
+            type: 'message',
+            role: 'assistant',
+            model: 'claude-e2e',
+            content: [],
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 10, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+          },
+        }) +
+          event('content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }),
+      );
+    },
+    sendText: async (text, size = 12) => {
+      for (const piece of chunk(text, size)) {
+        await push(event('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: piece } }));
+      }
+    },
+    finish: async (stopReason = 'end_turn') => {
+      await push(
+        event('content_block_stop', { type: 'content_block_stop', index: 0 }) +
+          event('message_delta', { type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: 20 } }) +
+          event('message_stop', { type: 'message_stop' }),
+      );
+      await page.evaluate(() => (window as unknown as { __heldSse: ReadableStreamDefaultController }).__heldSse.close());
+    },
+  };
+}

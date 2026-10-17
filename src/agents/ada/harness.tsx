@@ -99,7 +99,8 @@ const Harness: Component<HarnessProps> = (props) => {
   }
   return (
     <ChalkSpecRenderer
-      chunks={parseChunks(props.message.content as string)}
+      chunks={parseChunks(props.message.content as string, { streaming: props.streaming })}
+      streaming={props.streaming}
       onGraphClick={props.onGraphClick}
       onDrawSubmit={props.onDrawSubmit}
       onAnswerSubmit={props.onAnswerSubmit}

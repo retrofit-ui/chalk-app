@@ -13,6 +13,8 @@ export type HarnessProps = {
   onDrawSubmit?: (imageBase64: string) => void;
   onAnswerSubmit?: (answers: Record<string, string>) => void;
   previousAnswers?: Record<string, string>;
+  /** This message is still streaming in; its last spec may be partial. */
+  streaming?: boolean;
 };
 
 export type Agent = {
