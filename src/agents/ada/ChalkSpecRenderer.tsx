@@ -12,6 +12,10 @@ import type {
   ChalkMatrixSpec,
   ChalkMatmulSpec,
   ChalkComputeGraphSpec,
+  ChalkAutomatonSpec,
+  ChalkSearchSpec,
+  ChalkMarkovSpec,
+  ChalkMdpSpec,
 } from './spec';
 import CartesianGraph from './CartesianGraph';
 import DrawCanvas from './DrawCanvas';
@@ -21,6 +25,10 @@ import VectorDiagram from './VectorDiagram';
 import MatrixHeatmap from './MatrixHeatmap';
 import MatrixMultiplyView from './MatrixMultiplyView';
 import ComputeGraph from './ComputeGraph';
+import AutomatonView from './statemachines/AutomatonView';
+import SearchView from './statemachines/SearchView';
+import MarkovView from './statemachines/MarkovView';
+import MdpView from './statemachines/MdpView';
 
 type ViewNodeProps = {
   spec: { kind: string } & Record<string, unknown>;
@@ -73,6 +81,18 @@ const ViewNode: Component<ViewNodeProps> = (props) => {
       </Match>
       <Match when={props.spec.kind === 'chalk-compute-graph'}>
         <ComputeGraph spec={props.spec as unknown as ChalkComputeGraphSpec} />
+      </Match>
+      <Match when={props.spec.kind === 'chalk-automaton'}>
+        <AutomatonView spec={props.spec as unknown as ChalkAutomatonSpec} />
+      </Match>
+      <Match when={props.spec.kind === 'chalk-search'}>
+        <SearchView spec={props.spec as unknown as ChalkSearchSpec} />
+      </Match>
+      <Match when={props.spec.kind === 'chalk-markov'}>
+        <MarkovView spec={props.spec as unknown as ChalkMarkovSpec} />
+      </Match>
+      <Match when={props.spec.kind === 'chalk-mdp'}>
+        <MdpView spec={props.spec as unknown as ChalkMdpSpec} />
       </Match>
       <Match when={props.spec.kind === 'flex'}>
         <div

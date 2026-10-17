@@ -224,6 +224,97 @@ export type ChalkComputeGraphSpec = {
   size?: 'small' | 'medium' | 'large';
 };
 
+// ── State-machine family (chalk-automaton, chalk-search, chalk-markov, chalk-mdp) ──
+// All four share one diagram: circles for states, curved arrows for transitions,
+// loops for self-transitions. Ada declares the machine; the renderer's pure engines
+// (src/agents/ada/statemachines/) compute every number shown, so the picture can never
+// disagree with its own arithmetic.
+
+export type MachineState = {
+  id: string;
+  label?: string; // shown inside the circle; defaults to id
+  x?: number; // grid column (fractions allowed); omit on every state for a circular layout
+  y?: number; // grid row
+  colorIndex?: number;
+};
+
+export type AutomatonState = MachineState & { accept?: boolean };
+
+export type AutomatonTransition = {
+  from: string;
+  to: string;
+  symbols: string[]; // input symbols that fire this edge; "" or "ε" is an epsilon move
+};
+
+export type ChalkAutomatonSpec = {
+  kind: 'chalk-automaton';
+  title?: string;
+  states: AutomatonState[];
+  start: string;
+  transitions: AutomatonTransition[];
+  input?: string; // pre-filled input; single-character symbols are read char by char, otherwise space-separated
+  examples?: string[]; // quick-pick inputs shown as buttons
+  size?: 'small' | 'medium' | 'large';
+};
+
+export type SearchState = MachineState & { h?: number }; // heuristic estimate of cost to the goal
+
+export type SearchEdge = {
+  from: string;
+  to: string;
+  cost?: number; // default 1
+  label?: string; // shown instead of the cost when given
+};
+
+export type SearchAlgorithm = 'bfs' | 'dijkstra' | 'greedy' | 'astar';
+
+export type ChalkSearchSpec = {
+  kind: 'chalk-search';
+  title?: string;
+  states: SearchState[];
+  edges: SearchEdge[];
+  directed?: boolean; // default true
+  start: string;
+  goal: string;
+  algorithm?: SearchAlgorithm; // initial algorithm; default 'astar' if any state has h, else 'dijkstra'
+  algorithms?: SearchAlgorithm[]; // which algorithm buttons to offer; default all four
+  editable?: boolean; // let the student change edge costs and h values
+  size?: 'small' | 'medium' | 'large';
+};
+
+export type MarkovTransition = { from: string; to: string; p: number };
+
+export type ChalkMarkovSpec = {
+  kind: 'chalk-markov';
+  title?: string;
+  states: MachineState[];
+  transitions: MarkovTransition[];
+  start?: string; // default first state
+  showMatrix?: boolean; // default true
+  editable?: boolean; // probability inputs; editing one rescales the rest of its row
+  seed?: number; // random-walk seed, for reproducible demos
+  size?: 'small' | 'medium' | 'large';
+};
+
+export type MdpState = MachineState & { terminal?: boolean };
+
+export type MdpOutcome = { to: string; p: number; reward?: number };
+
+export type MdpAction = {
+  from: string;
+  name: string;
+  outcomes: MdpOutcome[];
+};
+
+export type ChalkMdpSpec = {
+  kind: 'chalk-mdp';
+  title?: string;
+  states: MdpState[];
+  actions: MdpAction[];
+  gamma?: number; // discount, default 0.9
+  size?: 'small' | 'medium' | 'large';
+};
+
 // Chunks in a Chalk message are either a top-level retrofit spec or a chalk-specific spec.
 // Using RootSpec (not ViewSpec) because chunks are rendered via SpecRenderer which accepts RootSpec.
 export type ChalkViewSpec =
@@ -236,4 +327,8 @@ export type ChalkViewSpec =
   | ChalkVectorsSpec
   | ChalkMatrixSpec
   | ChalkMatmulSpec
-  | ChalkComputeGraphSpec;
+  | ChalkComputeGraphSpec
+  | ChalkAutomatonSpec
+  | ChalkSearchSpec
+  | ChalkMarkovSpec
+  | ChalkMdpSpec;

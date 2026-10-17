@@ -1,3 +1,8 @@
+import automatonDoc from './statemachines/docs/chalk-automaton.md?raw';
+import searchDoc from './statemachines/docs/chalk-search.md?raw';
+import markovDoc from './statemachines/docs/chalk-markov.md?raw';
+import mdpDoc from './statemachines/docs/chalk-mdp.md?raw';
+
 export type AdaSkillKind =
   | 'chalk-graph'
   | 'chalk-draw'
@@ -7,6 +12,10 @@ export type AdaSkillKind =
   | 'chalk-matrix'
   | 'chalk-matmul'
   | 'chalk-compute-graph'
+  | 'chalk-automaton'
+  | 'chalk-search'
+  | 'chalk-markov'
+  | 'chalk-mdp'
   | 'layout';
 
 export const SKILL_KINDS: AdaSkillKind[] = [
@@ -18,6 +27,10 @@ export const SKILL_KINDS: AdaSkillKind[] = [
   'chalk-matrix',
   'chalk-matmul',
   'chalk-compute-graph',
+  'chalk-automaton',
+  'chalk-search',
+  'chalk-markov',
+  'chalk-mdp',
   'layout',
 ];
 
@@ -374,6 +387,12 @@ Compute-graph rules:
 - **Hovering (or tapping, on touch) any node highlights its full causal history** — every ancestor reachable by following edges backward — in one accent color, and **everything it affects** — every descendant reachable forward — in a second accent color; unrelated nodes/edges dim. This is automatic — you do not control or narrate it.
 - Keep graphs small (roughly 10-12 nodes) — layout is fully manual, so legibility drops fast beyond that.
 - Use for: tensor shape-flow pipelines (matmul → bias → activation, etc.) AND chain-rule/dependency graphs showing how one quantity's change propagates through others. Do NOT use for set relationships (\`chalk-sets\`) or concrete numeric matrix values (\`chalk-matrix\`/\`chalk-matmul\`) — this kind is for structure and dependency, not for displaying actual numbers.`,
+
+  // The state-machine family's docs live as markdown beside their renderers.
+  'chalk-automaton': automatonDoc.trim(),
+  'chalk-search': searchDoc.trim(),
+  'chalk-markov': markovDoc.trim(),
+  'chalk-mdp': mdpDoc.trim(),
 
   layout: `## layout
 
