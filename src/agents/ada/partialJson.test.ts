@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isIncomplete, parsePartialJson } from './partialJson';
+import { isIncomplete, parsePartialJson, PROSE_KEYS } from './partialJson';
 import * as K from '../../../e2e/fixtures/kinds';
 
 describe('parsePartialJson', () => {
@@ -21,9 +21,24 @@ describe('parsePartialJson', () => {
     expect(isIncomplete(v)).toBe(true);
   });
 
-  it('drops a half-typed kind or identifier rather than showing a wrong value', () => {
+  it('drops a half-typed code or reference string rather than showing a wrong value', () => {
     expect(parsePartialJson('{"kind":"chalk-gr')).toEqual({});
     expect(parsePartialJson('{"kind":"answerbox","identifier":"q1')).toEqual({ kind: 'answerbox' });
+    expect(parsePartialJson('{"functions":[{"fn":"x^2"},{"fn":"sin(x')).toEqual({ functions: [{ fn: 'x^2' }] });
+    expect(parsePartialJson('{"title":"T","fn":"sin(x')).toEqual({ title: 'T' });
+    expect(parsePartialJson('{"edges":[{"from":"q0","to":"q')).toEqual({ edges: [] });
+    expect(parsePartialJson('{"start":"q')).toEqual({});
+  });
+
+  it('treats unknown string keys as code: withheld until closed', () => {
+    expect(parsePartialJson('{"someNewField":"abc')).toEqual({});
+    expect(parsePartialJson('{"someNewField":"abc"')).toEqual({ someNewField: 'abc' });
+  });
+
+  it('types out every prose key', () => {
+    for (const key of ['label', 'title', 'text', 'content', 'header', 'description', 'prompt', 'note', 'placeholder', 'caption']) {
+      expect(parsePartialJson(`{"${key}":"Hel`)).toEqual({ [key]: 'Hel' });
+    }
   });
 
   it('drops an unterminated number, since more digits may follow', () => {
@@ -65,8 +80,8 @@ describe('parsePartialJson', () => {
   });
 
   it('cuts a string at a dangling escape instead of guessing', () => {
-    expect(parsePartialJson('{"s":"a\\')).toEqual({ s: 'a' });
-    expect(parsePartialJson('{"s":"a\\u00')).toEqual({ s: 'a' });
+    expect(parsePartialJson('{"text":"a\\')).toEqual({ text: 'a' });
+    expect(parsePartialJson('{"text":"a\\u00')).toEqual({ text: 'a' });
   });
 
   it('ignores trailing text after a complete value (e.g. a half-arrived closing fence)', () => {
@@ -111,7 +126,7 @@ function assertSubset(partial: unknown, final: unknown, where: string, key?: str
   if (partial === undefined) return;
   if (typeof partial === 'string') {
     expect(typeof final, where).toBe('string');
-    if (key === 'kind' || key === 'identifier') expect(partial, where).toBe(final);
+    if (key === undefined || !PROSE_KEYS.has(key)) expect(partial, `${where} [${key}]`).toBe(final);
     else expect((final as string).startsWith(partial), `${where} ${JSON.stringify(partial)}`).toBe(true);
     return;
   }

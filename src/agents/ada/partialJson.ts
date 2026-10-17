@@ -2,9 +2,11 @@
 // streaming. Unlike JSON.parse it never fails on truncated input; it returns
 // the largest value that is safe to render so far:
 //
-//   - open strings are kept (text types itself out), except for keys in
-//     ATOMIC_KEYS, whose half-typed values would be wrong rather than short
-//     ("chalk-gr" is not a kind, "q1" is not "q12")
+//   - an open string is dropped until its closing quote arrives, unless its
+//     key is in PROSE_KEYS. Most spec strings are code or references (fn,
+//     formula, id, from, to, path…), where a half-typed value is wrong rather
+//     than short: "sin(x" doesn't parse, "q" is not "q0". Prose types itself
+//     out. An unlisted prose key merely pops in whole, the safe way to be wrong
 //   - unterminated numbers and literals are dropped: "12" may become "125",
 //     and showing it would make the render jump
 //   - a key with no value yet is dropped
@@ -16,7 +18,18 @@
 // `incompleteNodes`, so the renderer can tell "still streaming" from "broken".
 // Malformed (not merely truncated) input throws, like JSON.parse.
 
-const ATOMIC_KEYS = new Set(['kind', 'identifier']);
+export const PROSE_KEYS = new Set([
+  'label',
+  'title',
+  'text',
+  'content',
+  'header',
+  'description',
+  'prompt',
+  'note',
+  'placeholder',
+  'caption',
+]);
 const OPEN_ELEMENT_KEYS = new Set(['children']);
 
 const incomplete = new WeakSet<object>();
@@ -51,7 +64,8 @@ class Parser {
     if (c === '[') return this.array(key);
     if (c === '"') {
       const r = this.string();
-      if (!r.done && key !== undefined && ATOMIC_KEYS.has(key)) return { value: MISSING, done: false };
+      if (r.done) return r;
+      if (key === undefined || !PROSE_KEYS.has(key)) return { value: MISSING, done: false };
       return r;
     }
     if (c === '-' || (c >= '0' && c <= '9')) return this.number();
