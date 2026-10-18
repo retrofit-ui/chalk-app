@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, Show, type Component } from 'solid-js';
+import { createEffect, createSignal, For, onMount, Show, type Component } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import {
   AVAILABLE_MODELS,
@@ -34,6 +34,7 @@ import ReplyBox from './components/ReplyBox';
 import DebugPanel from './components/DebugPanel';
 import Sidebar from './Sidebar';
 import { formatCost, formatTokens } from './format';
+import { createStickToBottom } from './stickToBottom';
 
 function resolveInitialConv(): Conversation {
   const savedId = getActiveId();
@@ -77,14 +78,15 @@ const App: Component = () => {
   const debugMessageCount = () => activeConv.messages.reduce((n, m) => n + (m.debug ? 1 : 0), 0);
   let textareaRef: HTMLTextAreaElement | undefined;
   let messagesRef: HTMLElement | undefined;
-
+  let messagesContentRef: HTMLDivElement | undefined;
+  let scroll: { pin: () => void } | undefined;
+  onMount(() => {
+    scroll = createStickToBottom(messagesRef!, messagesContentRef!);
+  });
+  // Opening a conversation starts at its latest message.
   createEffect(() => {
-    // Track both message count and last message content (for streaming)
-    void activeConv.messages.length;
-    void activeConv.messages[activeConv.messages.length - 1]?.content;
-    queueMicrotask(() => {
-      if (messagesRef) messagesRef.scrollTop = messagesRef.scrollHeight;
-    });
+    void activeConv.id;
+    queueMicrotask(() => scroll?.pin());
   });
 
   // Re-focus the textarea whenever the busy state clears (textarea re-enables after streaming)
@@ -200,6 +202,7 @@ const App: Component = () => {
     if (!key || busy()) return;
 
     setBusy(true);
+    scroll?.pin();
     try {
       await runSendMessage(userMsg, {
         apiKey: key,
@@ -332,7 +335,8 @@ const App: Component = () => {
             </div>
           </header>
 
-          <main ref={messagesRef} class="flex-1 overflow-y-auto py-6 px-5 flex flex-col gap-5">
+          <main ref={messagesRef} data-testid="messages" class="flex-1 overflow-y-auto py-6 px-5">
+            <div ref={messagesContentRef} class="flex flex-col gap-5">
             <Show when={activeConv.messages.length === 0 && !input()}>
               <div class="text-gray-300 text-center mt-15">Say something to {agent().name}.</div>
             </Show>
@@ -439,6 +443,7 @@ const App: Component = () => {
             <Show when={error()}>
               <div class="text-red-700 bg-red-50 py-2.5 px-3.5 rounded-lg text-sm">{error()}</div>
             </Show>
+            </div>
           </main>
 
           <footer class="pt-3 px-5 pb-4 border-t border-gray-200 flex-shrink-0">
