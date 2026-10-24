@@ -64,6 +64,28 @@ test.describe('sending a message', () => {
     await page.getByTitle('View lesson plan').click();
     await expect(page.getByText('derivatives')).toBeVisible();
   });
+
+  test('text sent alongside a tool_use stays visible next to the tool chip', async ({ page }) => {
+    await seedApp(page);
+    await routeAnthropic(page, [
+      sseResponse(
+        [
+          { type: 'text', text: 'Yes, exactly — that is the definition.' },
+          { type: 'tool_use', id: 'toolu_1', name: 'get_spec_docs', input: { kinds: ['chalk-graph'] } },
+        ],
+        'tool_use',
+      ),
+      sseResponse([{ type: 'text', text: 'Here is a graph.' }]),
+    ]);
+    await page.goto('/');
+
+    await page.getByTestId('composer-input').fill('is proportional linear?');
+    await page.getByTestId('composer-send').click();
+
+    await expect(page.getByText('Here is a graph.')).toBeVisible();
+    await expect(page.getByText('looked up: chalk-graph')).toBeVisible();
+    await expect(page.getByText('Yes, exactly — that is the definition.')).toBeVisible();
+  });
 });
 
 test.describe('interactive spec events become user turns', () => {

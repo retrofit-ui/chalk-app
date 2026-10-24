@@ -80,7 +80,25 @@ const Harness: Component<HarnessProps> = (props) => {
     return <DrawSubmissionEvent imageBase64={props.message.drawSubmissionData.imageBase64} />;
   }
   if (props.message.kind === 'tool-use' && props.message.toolUseData) {
-    return <ToolUseEvent calls={props.message.toolUseData.calls} />;
+    // A tool-use turn can say something before calling the tool; keep that text.
+    const content = props.message.content;
+    const text = typeof content === 'string'
+      ? content
+      : content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('\n\n');
+    return (
+      <div class="flex flex-col gap-2">
+        <Show when={text.trim()}>
+          <ChalkSpecRenderer
+            chunks={parseChunks(text, { streaming: props.streaming })}
+            streaming={props.streaming}
+            onGraphClick={props.onGraphClick}
+            onDrawSubmit={props.onDrawSubmit}
+            onAnswerSubmit={props.onAnswerSubmit}
+          />
+        </Show>
+        <ToolUseEvent calls={props.message.toolUseData.calls} />
+      </div>
+    );
   }
   if (props.message.kind === 'answer-submit' && props.message.answerData) {
     return (
