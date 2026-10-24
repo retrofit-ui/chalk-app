@@ -27,7 +27,7 @@ const {
   getAllConversations,
 } = await import('./conversations');
 
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_MODEL = 'claude-sonnet-5-5';
 
 function makeMessage(role: 'user' | 'assistant', content: string) {
   return { id: crypto.randomUUID(), role, content };
@@ -37,6 +37,10 @@ describe('newConversation', () => {
   it('defaults model to DEFAULT_MODEL', () => {
     const conv = newConversation();
     expect(conv.model).toBe(DEFAULT_MODEL);
+  });
+
+  it('defaults effort to low', () => {
+    expect(newConversation().effort).toBe('low');
   });
 
   it('accepts an explicit model', () => {
@@ -67,6 +71,14 @@ describe('forkConversation', () => {
     ],
     plans: ['plan v1'],
   };
+
+  it('keeps the source agent', () => {
+    expect(forkConversation({ ...source, agentId: 'bernoulli' }, 1).agentId).toBe('bernoulli');
+  });
+
+  it('carries the source effort over', () => {
+    expect(forkConversation({ ...source, effort: 'high' }, 1).effort).toBe('high');
+  });
 
   it('slices messages up to and including the given index', () => {
     const fork = forkConversation(source, 1);
@@ -181,6 +193,23 @@ describe('migration', () => {
     const convs = getAllConversations();
     expect(convs[0].model).toBe(DEFAULT_MODEL);
     expect(convs[0].plans).toEqual([]);
+  });
+
+  it('loads a conversation saved before effort existed with its model and messages untouched', () => {
+    const toolUse = { type: 'tool_use', id: 'tu', name: 'get_spec_docs', input: {} };
+    const oldConv = {
+      id: 'old-3', title: 'Old', createdAt: 1, updatedAt: 1, model: 'claude-sonnet-4-6', agentId: 'ada', plans: [],
+      messages: [
+        { id: 'm1', role: 'user', content: 'hi' },
+        { id: 'm2', role: 'assistant', kind: 'tool-use', content: [{ type: 'text', text: 'Let me check.' }, toolUse] },
+      ],
+    };
+    store['chalk.conversations'] = JSON.stringify({ 'old-3': oldConv });
+
+    const [conv] = getAllConversations();
+    expect(conv.model).toBe('claude-sonnet-4-6');
+    expect(conv.effort).toBe('low');
+    expect(conv.messages).toEqual(oldConv.messages);
   });
 
   it('normalizes messages missing id field', () => {

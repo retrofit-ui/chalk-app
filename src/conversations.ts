@@ -1,5 +1,5 @@
-import { DEFAULT_MODEL } from './anthropic';
-import type { ChatMessage, Usage } from './anthropic';
+import { DEFAULT_EFFORT, DEFAULT_MODEL } from './anthropic';
+import type { ChatMessage, Effort, Usage } from './anthropic';
 
 export type Conversation = {
   id: string;
@@ -8,6 +8,8 @@ export type Conversation = {
   updatedAt: number;
   messages: ChatMessage[];
   model: string;
+  /** Thinking level; ignored for models that predate adaptive thinking. */
+  effort?: Effort;
   agentId: string;
   plans: string[];
   usage?: Usage;
@@ -23,6 +25,7 @@ const ACTIVE_ID_KEY = 'chalk.activeConvId';
 function normalize(conv: Conversation): Conversation {
   return {
     model: DEFAULT_MODEL,
+    effort: DEFAULT_EFFORT,
     agentId: 'ada',
     plans: [],
     ...conv,
@@ -81,6 +84,7 @@ export function newConversation(model?: string, agentId?: string): Conversation 
     updatedAt: Date.now(),
     messages: [],
     model: model ?? DEFAULT_MODEL,
+    effort: DEFAULT_EFFORT,
     agentId: agentId ?? 'ada',
     plans: [],
   };
@@ -94,6 +98,8 @@ export function forkConversation(source: Conversation, messageIndex: number): Co
     updatedAt: Date.now(),
     messages: source.messages.slice(0, messageIndex + 1),
     model: source.model,
+    effort: source.effort,
+    agentId: source.agentId,
     plans: [...source.plans],
     provenance: {
       parentId: source.id,
