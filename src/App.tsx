@@ -1,5 +1,5 @@
 import { createEffect, createSignal, For, onMount, Show, type Component } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import { createStore, produce, reconcile } from 'solid-js/store';
 import {
   AVAILABLE_MODELS,
   clearStoredKey,
@@ -13,6 +13,7 @@ import {
   type Effort,
 } from './anthropic';
 import {
+  deleteConversation,
   forkConversation,
   getAllConversations,
   getActiveId,
@@ -137,8 +138,12 @@ const App: Component = () => {
     setMenuOpen(false);
   };
 
+  // setActiveConv(obj) shallow-merges, so keys the new conversation lacks
+  // (usage, provenance) would survive from the old one. reconcile replaces.
+  const replaceActiveConv = (conv: Conversation) => setActiveConv(reconcile(conv));
+
   const activateConv = (conv: Conversation) => {
-    setActiveConv(conv);
+    replaceActiveConv(conv);
     setActiveId(conv.id);
     setError(null);
     setInput('');
@@ -150,6 +155,15 @@ const App: Component = () => {
   const startNew = () => activateConv(newConversation(activeConv.model, activeConv.agentId));
 
   const selectConv = (conv: Conversation) => activateConv(conv);
+
+  const deleteConv = (conv: Conversation) => {
+    if (!window.confirm(`Delete “${conv.title}”? This cannot be undone.`)) return;
+    deleteConversation(conv.id);
+    if (activeConv.id === conv.id) startNew();
+    // The open chat may be one of the forks deleteConversation just promoted.
+    else if (activeConv.provenance?.parentId === conv.id) setActiveConv('provenance', undefined);
+    refreshList();
+  };
 
   const selectExample = (example: Conversation) => {
     const conv = newConversation(activeConv.model, activeConv.agentId);
@@ -187,14 +201,14 @@ const App: Component = () => {
     if (msg.role === 'user') {
       // Exclude this message from history; restore its text to the composer for editing
       const reverted = revertConversation({ ...activeConv }, messageIndex - 1);
-      setActiveConv(reverted);
+      replaceActiveConv(reverted);
       upsertConversation(reverted);
       setInput(msg.content);
       setTimeout(() => textareaRef?.focus(), 0);
     } else {
       // Keep up to and including this assistant message; nudge user to reply
       const reverted = revertConversation({ ...activeConv }, messageIndex);
-      setActiveConv(reverted);
+      replaceActiveConv(reverted);
       upsertConversation(reverted);
       setTimeout(() => textareaRef?.focus(), 0);
     }
@@ -264,6 +278,7 @@ const App: Component = () => {
           onNew={startNew}
           onSelect={selectConv}
           onSelectExample={selectExample}
+          onDelete={deleteConv}
         />
 
         <div class="flex-1 flex flex-col min-w-0">

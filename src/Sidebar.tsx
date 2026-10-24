@@ -21,9 +21,32 @@ type Props = {
   onNew: () => void;
   onSelect: (conv: Conversation) => void;
   onSelectExample: (conv: Conversation) => void;
+  onDelete: (conv: Conversation) => void;
 };
 
+const deleteClass =
+  'absolute right-1.5 top-1/2 -translate-y-1/2 bg-transparent border-none text-gray-400 cursor-pointer text-sm leading-none px-1 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-600';
+
 const Sidebar: Component<Props> = (props) => {
+  const Item = (p: { conv: Conversation; class: string; label: string }) => (
+    <div class="group relative">
+      <button
+        class={`${itemClass} ${p.class} pr-7 ${props.activeId === p.conv.id ? activeClass : ''}`}
+        onClick={() => props.onSelect(p.conv)}
+      >
+        {p.label}
+      </button>
+      <button
+        class={deleteClass}
+        title="Delete chat"
+        aria-label={`Delete “${p.conv.title}”`}
+        onClick={() => props.onDelete(p.conv)}
+      >
+        ×
+      </button>
+    </div>
+  );
+
   // Only top-level (non-forked) convs appear in date groups
   const topLevel = () => props.conversations.filter((c) => !c.provenance);
   const grouped = () => groupConversations(topLevel());
@@ -49,21 +72,9 @@ const Sidebar: Component<Props> = (props) => {
                 <For each={grouped()[group]}>
                   {(conv) => (
                     <>
-                      <button
-                        class={`${itemClass} ${props.activeId === conv.id ? activeClass : ''}`}
-                        onClick={() => props.onSelect(conv)}
-                      >
-                        {conv.title}
-                      </button>
+                      <Item conv={conv} class="" label={conv.title} />
                       <For each={props.childMap.get(conv.id) ?? []}>
-                        {(child) => (
-                          <button
-                            class={`${itemClass} ${childClass} ${props.activeId === child.id ? activeClass : ''}`}
-                            onClick={() => props.onSelect(child)}
-                          >
-                            ⎇ {child.title}
-                          </button>
-                        )}
+                        {(child) => <Item conv={child} class={childClass} label={`⎇ ${child.title}`} />}
                       </For>
                     </>
                   )}

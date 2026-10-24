@@ -70,9 +70,14 @@ export function upsertConversation(conv: Conversation): void {
   saveAll(all);
 }
 
+// Forks of the deleted conversation are promoted to top level; the sidebar only
+// shows a fork under its parent, so leaving provenance would hide them.
 export function deleteConversation(id: string): void {
   const all = loadAll();
   delete all[id];
+  for (const conv of Object.values(all)) {
+    if (conv.provenance?.parentId === id) delete conv.provenance;
+  }
   saveAll(all);
 }
 

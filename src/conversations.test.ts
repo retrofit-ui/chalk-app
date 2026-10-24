@@ -25,6 +25,7 @@ const {
   deriveTitle,
   upsertConversation,
   getAllConversations,
+  deleteConversation,
 } = await import('./conversations');
 
 const DEFAULT_MODEL = 'claude-sonnet-5-5';
@@ -224,5 +225,25 @@ describe('migration', () => {
 
     const convs = getAllConversations();
     expect(convs[0].messages[0].id).toBeTruthy();
+  });
+});
+
+describe('deleteConversation', () => {
+  it('removes the conversation and promotes its forks to top level', () => {
+    const parent = newConversation();
+    parent.messages = [makeMessage('user', 'hi')];
+    const fork = forkConversation(parent, 0);
+    const bystander = newConversation();
+    upsertConversation(parent);
+    upsertConversation(fork);
+    upsertConversation(bystander);
+
+    deleteConversation(parent.id);
+
+    const ids = getAllConversations().map((c) => c.id);
+    expect(ids).not.toContain(parent.id);
+    expect(ids).toContain(fork.id);
+    expect(ids).toContain(bystander.id);
+    expect(getAllConversations().find((c) => c.id === fork.id)!.provenance).toBeUndefined();
   });
 });
