@@ -3,10 +3,14 @@ import { createStore, produce } from 'solid-js/store';
 import {
   AVAILABLE_MODELS,
   clearStoredKey,
+  DEFAULT_EFFORT,
+  EFFORT_LEVELS,
   getStoredKey,
   isKeyFromEnv,
   setStoredKey,
+  supportsEffort,
   type ChatMessage,
+  type Effort,
 } from './anthropic';
 import {
   forkConversation,
@@ -160,6 +164,11 @@ const App: Component = () => {
     upsertConversation({ ...activeConv });
   };
 
+  const setEffort = (effort: Effort) => {
+    setActiveConv('effort', effort);
+    upsertConversation({ ...activeConv });
+  };
+
   const setAgentId = (id: string) => {
     setActiveConv('agentId', id);
     upsertConversation({ ...activeConv });
@@ -279,15 +288,34 @@ const App: Component = () => {
                 </For>
               </select>
               <select
+                data-testid="model-select"
                 class="text-[11px] text-gray-300 font-mono bg-transparent border-none cursor-pointer outline-none p-0 hover:text-gray-400 disabled:opacity-50 disabled:cursor-default"
                 value={activeConv.model}
                 onChange={(e) => setModel(e.currentTarget.value)}
                 disabled={busy()}
               >
+                {/* A conversation saved on an older model keeps it; list it so the picker doesn't misreport. */}
+                <Show when={!supportsEffort(activeConv.model)}>
+                  <option value={activeConv.model}>{activeConv.model}</option>
+                </Show>
                 <For each={AVAILABLE_MODELS}>
                   {(m) => <option value={m}>{m}</option>}
                 </For>
               </select>
+              <Show when={supportsEffort(activeConv.model)}>
+                <select
+                  data-testid="effort-select"
+                  title="Thinking level"
+                  class="text-[11px] text-gray-300 font-mono bg-transparent border-none cursor-pointer outline-none p-0 hover:text-gray-400 disabled:opacity-50 disabled:cursor-default"
+                  value={activeConv.effort ?? DEFAULT_EFFORT}
+                  onChange={(e) => setEffort(e.currentTarget.value as Effort)}
+                  disabled={busy()}
+                >
+                  <For each={EFFORT_LEVELS}>
+                    {(level) => <option value={level}>thinking: {level}</option>}
+                  </For>
+                </select>
+              </Show>
             </div>
             <div class="ml-auto flex items-center gap-3 flex-shrink-0 relative">
               <Show when={activeConv.usage}>

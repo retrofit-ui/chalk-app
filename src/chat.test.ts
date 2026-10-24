@@ -746,6 +746,91 @@ describe('sendMessage', () => {
     });
   });
 
+  describe('thinking', () => {
+    function captureParams(model: string, effort?: Conversation['effort']) {
+      const calls: Array<{ params: Record<string, unknown>; options: unknown }> = [];
+      const client = {
+        messages: {
+          stream: vi.fn((params: Record<string, unknown>, options: unknown) => {
+            calls.push({ params, options });
+            return makeStream([], makeFinalMessage());
+          }),
+        },
+      } as unknown as Anthropic;
+      const store = makeConvStore({ model, effort });
+      return { calls, client, ...store };
+    }
+
+    it('sends adaptive thinking with update notes, the effort and the beta header on Sonnet 5.5', async () => {
+      const { calls, client, getConv, setConv } = captureParams('claude-sonnet-5-5', 'medium');
+      await sendMessage({ role: 'user', content: 'hi' }, { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, client });
+      expect(calls[0].params.thinking).toEqual({ type: 'adaptive', display: 'updates' });
+      expect(calls[0].params.output_config).toEqual({ effort: 'medium' });
+      expect(calls[0].options).toEqual({ headers: { 'anthropic-beta': 'thinking-display-updates-2026-08-18' } });
+    });
+
+    it('defaults effort to low when the conversation has none', async () => {
+      const { calls, client, getConv, setConv } = captureParams('claude-opus-5-5');
+      await sendMessage({ role: 'user', content: 'hi' }, { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, client });
+      expect(calls[0].params.output_config).toEqual({ effort: 'low' });
+    });
+
+    it('sends adaptive thinking without the updates beta on Haiku 5.5', async () => {
+      const { calls, client, getConv, setConv } = captureParams('claude-haiku-5-5', 'low');
+      await sendMessage({ role: 'user', content: 'hi' }, { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, client });
+      expect(calls[0].params.thinking).toEqual({ type: 'adaptive' });
+      expect(calls[0].options).toBeUndefined();
+    });
+
+    it('leaves requests for pre-5.5 models exactly as before', async () => {
+      const { calls, client, getConv, setConv } = captureParams('claude-sonnet-4-6', 'high');
+      await sendMessage({ role: 'user', content: 'hi' }, { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, client });
+      expect(calls[0].params).not.toHaveProperty('thinking');
+      expect(calls[0].params).not.toHaveProperty('output_config');
+      expect(calls[0].options).toBeUndefined();
+    });
+
+    it('keeps thinking blocks with their signatures and replays them unchanged next round', async () => {
+      const thinking = { type: 'thinking', thinking: 'Checking the docs first.', signature: 'sig_1' };
+      const toolUse = { type: 'tool_use', id: 'tu_1', name: 'get_spec_docs', input: { kinds: ['chalk-graph'] } };
+      const streamFn = vi
+        .fn()
+        .mockReturnValueOnce(makeStream([], makeFinalMessage({ stop_reason: 'tool_use', content: [thinking, toolUse] })))
+        .mockReturnValueOnce(makeStream([], makeFinalMessage({ content: [{ type: 'redacted_thinking', data: 'enc' }, { type: 'text', text: 'Done.' }] })));
+      const client = { messages: { stream: streamFn } } as unknown as Anthropic;
+      const { getConv, setConv } = makeConvStore({ model: 'claude-sonnet-5-5' });
+      await sendMessage(
+        { role: 'user', content: 'hi' },
+        { apiKey: 'k', agent: makeAgent({ executeSkill: () => 'docs' }), getConv, setConv, onError: () => {}, client },
+      );
+      expect(getConv().messages[1].content).toEqual([thinking, toolUse]);
+      expect(getConv().messages[3].content).toEqual([{ type: 'redacted_thinking', data: 'enc' }, { type: 'text', text: 'Done.' }]);
+      const replayed = (streamFn.mock.calls[1][0] as { messages: Array<{ content: unknown }> }).messages[1];
+      expect(replayed.content).toEqual([thinking, toolUse]);
+    });
+
+    it('streams thinking-block progress notes into the visible text, a blank line between blocks', async () => {
+      const seen: string[] = [];
+      const { getConv, setConv } = makeConvStore({ model: 'claude-sonnet-5-5' });
+      const stream = {
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } };
+          yield { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Looking up graphs.' } };
+          yield { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'sig' } };
+          yield { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } };
+          yield { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Here.' } };
+          seen.push(getConv().messages[1].content as string);
+        },
+        finalMessage: async () => makeFinalMessage({
+          content: [{ type: 'thinking', thinking: 'Looking up graphs.', signature: 'sig' }, { type: 'text', text: 'Here.' }],
+        }),
+      };
+      const client = fakeClient(() => stream as unknown as ReturnType<typeof makeStream>);
+      await sendMessage({ role: 'user', content: 'hi' }, { apiKey: 'k', agent: makeAgent(), getConv, setConv, onError: () => {}, client });
+      expect(seen).toEqual(['Looking up graphs.\n\nHere.']);
+    });
+  });
+
   describe('client injection', () => {
     it('uses the injected deps.client instead of constructing one via makeClient when provided', async () => {
       const client = fakeClient(() => makeStream([], makeFinalMessage()));

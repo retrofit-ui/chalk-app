@@ -3,12 +3,13 @@ import type { SetStoreFunction } from 'solid-js/store';
 import { produce } from 'solid-js/store';
 import type Anthropic from '@anthropic-ai/sdk';
 import {
+  DEFAULT_EFFORT,
   DEFAULT_MODEL,
   estimateCost,
   makeClient,
+  thinkingConfig,
   type ChatMessage,
-  type TextBlock,
-  type ToolUseBlock,
+  type ContentBlock,
 } from './anthropic';
 import { deriveTitle, type Conversation } from './conversations';
 import type { Agent } from './agents/types';
@@ -66,6 +67,7 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
 
   try {
     const model = getConv().model ?? DEFAULT_MODEL;
+    const thinking = thinkingConfig(model, getConv().effort ?? DEFAULT_EFFORT);
     const tools = agent.skills.length > 0 ? (agent.skills as never) : undefined;
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -77,7 +79,9 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
 
       const priorMessages = getConv().messages.slice(0, assistantIdx);
       const lastIdx = priorMessages.length - 1;
+      // The pinned SDK predates adaptive thinking and effort, so those fields go in untyped.
       const stream = client.messages.stream({
+        ...(thinking.params as object),
         model,
         max_tokens: 32000,
         system: [
@@ -100,14 +104,25 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
           }
           return { role: m.role, content: blocks };
         }),
-      });
+      } as Parameters<typeof client.messages.stream>[0],
+      thinking.betas.length > 0 ? { headers: { 'anthropic-beta': thinking.betas.join(',') } } : undefined);
 
+      // While streaming, content is the visible text so far: text plus thinking-block
+      // progress notes, a blank line between blocks.
+      let blockStarted = false;
       for await (const event of stream) {
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'text_delta'
-        ) {
-          setConv('messages', assistantIdx, 'content', (c: string) => c + event.delta.text);
+        if (event.type === 'content_block_start') {
+          blockStarted = true;
+        } else if (event.type === 'content_block_delta') {
+          const delta = event.delta as { type: string; text?: string; thinking?: string };
+          const piece = delta.type === 'text_delta' ? delta.text : delta.type === 'thinking_delta' ? delta.thinking : undefined;
+          if (!piece) continue;
+          const separate = blockStarted;
+          blockStarted = false;
+          setConv('messages', assistantIdx, 'content', (c) => {
+            const text = c as string;
+            return (separate && text ? text + '\n\n' : text) + piece;
+          });
         }
       }
 
@@ -142,22 +157,32 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
       }
       setConv('messages', assistantIdx, 'model', model);
 
+      // Keep every block the API needs back, thinking blocks included, unchanged: the next
+      // request must replay them as they came or the model loses its reasoning. A reply
+      // that is only text stays the streamed string.
+      const blocks = (finalMsg.content as unknown as Array<{ type: string } & Record<string, unknown>>).flatMap(
+        (b): ContentBlock[] => {
+          if (b.type === 'text') return [{ type: 'text', text: b.text as string }];
+          if (b.type === 'tool_use') {
+            return [{ type: 'tool_use', id: b.id as string, name: b.name as string, input: b.input }];
+          }
+          if (b.type === 'thinking') {
+            return [{ type: 'thinking', thinking: b.thinking as string, signature: b.signature as string }];
+          }
+          if (b.type === 'redacted_thinking') return [{ type: 'redacted_thinking', data: b.data as string }];
+          return [];
+        },
+      );
+      if (blocks.some((b) => b.type !== 'text')) {
+        setConv('messages', assistantIdx, 'content', blocks);
+      }
+
       if (finalMsg.stop_reason === 'tool_use') {
         const toolUseBlocks = finalMsg.content.filter(
           (b): b is { type: 'tool_use'; id: string; name: string; input: unknown } => b.type === 'tool_use',
         );
-        const normalizedContent = finalMsg.content.flatMap(
-          (b): Array<TextBlock | ToolUseBlock> => {
-            if (b.type === 'text') return [{ type: 'text', text: b.text }];
-            if (b.type === 'tool_use') {
-              return [{ type: 'tool_use', id: b.id, name: b.name, input: b.input }];
-            }
-            return [];
-          },
-        );
 
         setConv('messages', assistantIdx, {
-          content: normalizedContent,
           kind: 'tool-use',
           toolUseData: { calls: toolUseBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })) },
         });

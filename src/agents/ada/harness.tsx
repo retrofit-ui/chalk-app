@@ -1,5 +1,6 @@
 import { type Component, For, Show } from 'solid-js';
 import type { HarnessProps } from '../types';
+import { visibleText } from '../../anthropic';
 import ChalkSpecRenderer from './ChalkSpecRenderer';
 import { findPreviousAnswers, parseChunks } from './chunkParser';
 
@@ -81,10 +82,7 @@ const Harness: Component<HarnessProps> = (props) => {
   }
   if (props.message.kind === 'tool-use' && props.message.toolUseData) {
     // A tool-use turn can say something before calling the tool; keep that text.
-    const content = props.message.content;
-    const text = typeof content === 'string'
-      ? content
-      : content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('\n\n');
+    const text = visibleText(props.message.content);
     return (
       <div class="flex flex-col gap-2">
         <Show when={text.trim()}>
@@ -117,7 +115,7 @@ const Harness: Component<HarnessProps> = (props) => {
   }
   return (
     <ChalkSpecRenderer
-      chunks={parseChunks(props.message.content as string, { streaming: props.streaming })}
+      chunks={parseChunks(visibleText(props.message.content), { streaming: props.streaming })}
       streaming={props.streaming}
       onGraphClick={props.onGraphClick}
       onDrawSubmit={props.onDrawSubmit}

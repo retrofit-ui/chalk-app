@@ -7,6 +7,7 @@ import type { Page, Route } from '@playwright/test';
 
 export type CannedBlock =
   | { type: 'text'; text: string }
+  | { type: 'thinking'; thinking: string; signature: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> };
 
 export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens';
@@ -41,6 +42,12 @@ export function sseResponse(blocks: CannedBlock[], stopReason: StopReason = 'end
       for (const piece of chunk(block.text, 12)) {
         out += event('content_block_delta', { type: 'content_block_delta', index, delta: { type: 'text_delta', text: piece } });
       }
+    } else if (block.type === 'thinking') {
+      out += event('content_block_start', { type: 'content_block_start', index, content_block: { type: 'thinking', thinking: '', signature: '' } });
+      if (block.thinking) {
+        out += event('content_block_delta', { type: 'content_block_delta', index, delta: { type: 'thinking_delta', thinking: block.thinking } });
+      }
+      out += event('content_block_delta', { type: 'content_block_delta', index, delta: { type: 'signature_delta', signature: block.signature } });
     } else {
       out += event('content_block_start', {
         type: 'content_block_start',
@@ -82,6 +89,8 @@ export type RecordedRequest = {
 export type AnthropicRoute = {
   /** Request bodies in the order the app sent them. */
   requests: RecordedRequest[];
+  /** Request headers, parallel to `requests`. */
+  headers: Array<Record<string, string>>;
   /** Resolves once the app has sent `n` requests. */
   waitForRequests: (n: number) => Promise<void>;
 };
@@ -99,6 +108,7 @@ const CORS = {
  */
 export async function routeAnthropic(page: Page, responses: string[]): Promise<AnthropicRoute> {
   const requests: RecordedRequest[] = [];
+  const headers: Array<Record<string, string>> = [];
   const waiters: Array<{ n: number; resolve: () => void }> = [];
 
   await page.route('**/v1/messages', async (route: Route) => {
@@ -109,6 +119,7 @@ export async function routeAnthropic(page: Page, responses: string[]): Promise<A
     }
     const body = req.postDataJSON() as RecordedRequest;
     requests.push(body);
+    headers.push(await req.allHeaders());
     for (const w of waiters.splice(0)) {
       if (requests.length >= w.n) w.resolve();
       else waiters.push(w);
@@ -132,6 +143,7 @@ export async function routeAnthropic(page: Page, responses: string[]): Promise<A
 
   return {
     requests,
+    headers,
     waitForRequests: (n) =>
       requests.length >= n
         ? Promise.resolve()
