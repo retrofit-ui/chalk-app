@@ -41,6 +41,9 @@ export class SpecValidationError extends Error {
 const TAU = 2 * Math.PI;
 const AXIS_EPSILON = 1e-9;
 
+/** An expression field; a finite number is a constant expression (`"r": 2` is a circle). */
+const expression = (v: unknown): unknown => (typeof v === 'number' && Number.isFinite(v) ? String(v) : v);
+
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -77,9 +80,10 @@ class Problems {
       return fallback;
     }
     const pair = { a: v[0], b: v[1] };
-    return angular
-      ? [this.angle(pair, 'a', `${where} ${key}[0]`), this.angle(pair, 'b', `${where} ${key}[1]`)]
-      : [this.num(pair, 'a', `${where} ${key}[0]`), this.num(pair, 'b', `${where} ${key}[1]`)];
+    if (angular) return [this.angle(pair, 'a', `${where} ${key}[0]`), this.angle(pair, 'b', `${where} ${key}[1]`)];
+    const range: V2 = [this.num(pair, 'a', `${where} ${key}[0]`), this.num(pair, 'b', `${where} ${key}[1]`)];
+    if (range[0] >= range[1]) this.add(`${where}: \`${key}\` start must be smaller than its end.`);
+    return range;
   }
 
   oneOf<T extends string>(obj: Obj, key: string, allowed: readonly T[], fallback: T, where = ''): T {
@@ -178,9 +182,10 @@ export function resolveGraph(spec: ChalkGraphSpec): ResolvedGraph {
           : 'A cartesian curve is a function of x (and slider params).', true);
       curves.push({ coords: 'cartesian', fn: c.fn, label });
     } else if (coords === 'polar') {
-      if (typeof c.r !== 'string') return p.add(`${where}: a polar curve needs "r", a function of theta.`);
-      p.variables(c.r, ['theta', ...paramNames], where, () => 'A polar curve gives r as a function of theta (and slider params).');
-      curves.push({ coords: 'polar', r: c.r, range: p.range(c, 'thetaDomain', where, [0, TAU], true), label });
+      const r = expression(c.r);
+      if (typeof r !== 'string') return p.add(`${where}: a polar curve needs "r", a function of theta.`);
+      p.variables(r, ['theta', ...paramNames], where, () => 'A polar curve gives r as a function of theta (and slider params).');
+      curves.push({ coords: 'polar', r, range: p.range(c, 'thetaDomain', where, [0, TAU], true), label });
     } else {
       p.add(`${where}: \`coords\` must be "cartesian" or "polar", not ${JSON.stringify(coords)}.`);
     }
@@ -196,8 +201,10 @@ export function resolveGraph(spec: ChalkGraphSpec): ResolvedGraph {
   let yDomain = raw.yDomain === undefined ? undefined : p.range(raw, 'yDomain', 'chalk-graph', [-5, 5], false);
   p.throwIfAny();
 
-  if (grid === 'polar' && !xDomain && !yDomain) {
-    const samples: V2[] = points.map((pt) => [pt.x, pt.y]);
+  // A polar grid needs both domains to draw rings at equal scale: fit whichever is missing
+  // (including mid-stream, when xDomain has arrived and yDomain hasn't).
+  if (grid === 'polar' && (!xDomain || !yDomain)) {
+    const samples: V2[] = [];
     for (const c of curves) {
       if (c.coords !== 'polar') continue;
       try {
@@ -211,7 +218,9 @@ export function resolveGraph(spec: ChalkGraphSpec): ResolvedGraph {
         // Unsampleable here (e.g. a function only function-plot knows): fit to the rest.
       }
     }
-    ({ xDomain, yDomain } = fitDomain(samples));
+    const fitted = fitDomain(points.map((pt): V2 => [pt.x, pt.y]), samples);
+    xDomain ??= fitted.xDomain;
+    yDomain ??= fitted.yDomain;
   }
 
   return { grid, angleUnit: p.angleUnit, curves, points, xDomain, yDomain };
@@ -253,8 +262,12 @@ export function resolveVectors(spec: ChalkVectorsSpec): ResolvedVectors {
     if (!isObj(v)) return p.add(`${where} must be an object.`);
     const start: V2 = v.at !== undefined ? point2D(p, v.at, `${where} at`) : compose === 'head-to-tail' ? cursor : [0, 0];
     const tail = Math.hypot(start[0], start[1]) > AXIS_EPSILON ? polarBasis(Math.atan2(start[1], start[0])) : null;
+    let reported = false;
     const needsBasis = (why: string) => {
-      if (!tail) p.add(`${where}: ${why} needs r̂ and θ̂ at the tail, which are undefined at the origin — give the vector an \`at\`.`);
+      if (!tail && !reported) {
+        p.add(`${where}: ${why} needs r̂ and θ̂ at the tail, which are undefined at the origin — give the vector an \`at\`.`);
+        reported = true;
+      }
       return tail;
     };
 
@@ -459,7 +472,7 @@ function surface3D(p: Problems, s: unknown, where: string): ResolvedSurface | nu
     return null;
   }
 
-  const expr = s[solved[0]];
+  const expr = expression(s[solved[0]]);
   if (typeof expr !== 'string') {
     p.add(`${where}: "${solved[0]}" must be an expression string.`);
     return null;

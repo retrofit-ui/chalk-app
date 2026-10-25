@@ -73,6 +73,7 @@ const PATH_ANIMATION_DURATION_MS = 2500;
 const FLOOR_GRID_COLOR = '#cbd5e1';
 const BASIS_COLOR = '#94a3b8';
 const DEFAULT_FLOOR_RADIUS = 4; // matches the AxesHelper length
+const MAX_FLOOR_RADIUS = 20;
 
 // A floor grid in z = 0 (the xy-plane): integer squares, or rings + spokes every π/6.
 function buildFloorGrid(
@@ -103,7 +104,6 @@ function buildFloorGrid(
       const label = makeLabel(formatAngle(theta, angleUnit), BASIS_COLOR);
       label.element.style.fontWeight = '400';
       label.element.style.fontSize = '10px';
-      label.element.style.transform = 'translate(-50%, -50%)';
       label.position.set(...polarToCartesian(reach * 1.12, theta), 0);
       labels.push(label);
     }
@@ -523,10 +523,16 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
       }
     });
 
-    // Floor grid (z = 0), sized to cover any polar height map's disc
-    const floorRadius = Math.max(
-      DEFAULT_FLOOR_RADIUS,
-      ...surfaces.map((s) => (s.kind === 'curvilinear' && s.input.form === 'cylindrical-z' ? Math.ceil(Math.abs(s.input.uDomain[1])) : 0)),
+    // Floor grid (z = 0), sized to cover any polar height map's disc — capped, since the grid
+    // is built line by line and rDomain is model-written.
+    const floorRadius = Math.min(
+      MAX_FLOOR_RADIUS,
+      Math.max(
+        DEFAULT_FLOOR_RADIUS,
+        ...surfaces.map((s) =>
+          s.kind === 'curvilinear' && s.input.form === 'cylindrical-z' ? Math.ceil(Math.max(...s.input.uDomain.map(Math.abs))) : 0,
+        ),
+      ),
     );
     const floor = buildFloorGrid(resolved.grid, floorRadius, resolved.angleUnit);
     for (const o of floor.objects) staticGroup.add(o);

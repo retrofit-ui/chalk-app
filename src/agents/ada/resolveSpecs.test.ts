@@ -61,6 +61,31 @@ describe('resolveGraph', () => {
     expect(r.xDomain![1]).toBeCloseTo(4.6, 1);
   });
 
+  it('fits a curve with a pole to its body, not to the blow-up', () => {
+    // A hyperbolic orbit: r → ∞ as cos θ → -1/2, and at θ = 2π/3 floating point gives r ≈ 2e15.
+    const r = resolveGraph(graph({ grid: 'polar', curves: [{ coords: 'polar', r: '1/(1 + 2*cos(theta))' }] }));
+    expect(r.xDomain![1]).toBeLessThan(20);
+    expect(r.xDomain![1]).toBeGreaterThan(1);
+    // A bounded curve still gets its whole extent (the cardioid's tip at r = 2).
+    const cardioid = resolveGraph(graph({ grid: 'polar', curves: [{ coords: 'polar', r: '1 + cos(theta)' }] }));
+    expect(cardioid.xDomain![1]).toBeCloseTo(2.3, 1);
+  });
+
+  it('fills in the missing domain of a half-specified polar graph', () => {
+    const r = resolveGraph(graph({ grid: 'polar', xDomain: [-3, 3], curves: [{ coords: 'polar', r: '2' }] }));
+    expect(r.xDomain).toEqual([-3, 3]);
+    expect(r.yDomain![1]).toBeCloseTo(2.3, 1);
+  });
+
+  it('accepts a constant radius written as a number', () => {
+    const r = resolveGraph(graph({ grid: 'polar', curves: [{ coords: 'polar', r: 2 as never }] }));
+    expect(r.curves[0]).toMatchObject({ coords: 'polar', r: '2' });
+  });
+
+  it('rejects an empty or reversed axis domain', () => {
+    expect(errorsOf(() => resolveGraph(graph({ xDomain: [3, 3] })))).toEqual([expect.stringMatching(/xDomain.*smaller/)]);
+  });
+
   it('reports every problem, naming the item', () => {
     const errors = errorsOf(() =>
       resolveGraph(
@@ -120,6 +145,13 @@ describe('resolveVectors', () => {
     close(r.arrows[0].end, [-3, 3]);
     close(r.arrows[0].basis!.rHat, [0, 1]);
     close(r.arrows[0].basis!.thetaHat, [-1, 0]);
+  });
+
+  it('reports a basis at the origin once, even with showBasis', () => {
+    const errors = errorsOf(() =>
+      resolveVectors(vectors({ vectors: [{ id: 'v', coords: 'polar-basis', radial: 1, tangential: 0, showBasis: true }] })),
+    );
+    expect(errors).toHaveLength(1);
   });
 
   it('refuses a local basis at the origin', () => {
@@ -197,6 +229,11 @@ describe('resolveScene', () => {
     expect(c).toMatchObject({ form: 'spherical-rho' });
     close(c!.uDomain, [0, Math.PI]);
     close(c!.vDomain, [0, Math.PI]);
+  });
+
+  it('accepts constant surfaces written as numbers', () => {
+    const r = resolveScene(scene({ surfaces: [{ coords: 'spherical', rho: 2 as never }, { coords: 'cylindrical', z: 0 as never }] }));
+    expect(r.surfaces.map((s) => s.kind === 'curvilinear' && s.input.expr)).toEqual(['2', '0']);
   });
 
   it('reports surface and vector problems', () => {

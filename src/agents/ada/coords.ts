@@ -148,11 +148,21 @@ export function equalScaleDomains(xDomain: V2, yDomain: V2, width: number, heigh
   return { xDomain: widen(xDomain, yPer * width), yDomain };
 }
 
-/** A square-ish domain containing every point with 15% padding (min half-width 1). */
-export function fitDomain(points: V2[], fallback: V2 = [-5, 5]): { xDomain: V2; yDomain: V2 } {
-  const finite = points.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
-  if (!finite.length) return { xDomain: fallback, yDomain: fallback };
-  const extent = Math.max(1, ...finite.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y)))) * 1.15;
+const extentOf = ([x, y]: V2) => Math.max(Math.abs(x), Math.abs(y));
+const isFinite2 = ([x, y]: V2) => Number.isFinite(x) && Number.isFinite(y);
+
+/**
+ * A square domain around the origin with 15% padding (min half-width 1). `points` the author
+ * placed always fit; `samples` of a curve are capped at 4× their median extent, so a pole
+ * (r = 1/(1 + 2cos θ) reaches 2e15 in floating point) doesn't zoom the view out to nothing.
+ */
+export function fitDomain(points: V2[], samples: V2[] = [], fallback: V2 = [-5, 5]): { xDomain: V2; yDomain: V2 } {
+  const placed = points.filter(isFinite2).map(extentOf);
+  const sampled = samples.filter(isFinite2).map(extentOf).sort((a, b) => a - b);
+  if (!placed.length && !sampled.length) return { xDomain: fallback, yDomain: fallback };
+  const median = sampled[Math.floor(sampled.length / 2)] ?? 0;
+  const curveExtent = sampled.length ? Math.min(sampled[sampled.length - 1], 4 * median) : 0;
+  const extent = Math.max(1, curveExtent, ...placed) * 1.15;
   return { xDomain: [-extent, extent], yDomain: [-extent, extent] };
 }
 
