@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import SpecErrors from './statemachines/SpecErrors';
+import { SpecValidationError } from './resolveSpecs';
 
 const NAMES: Record<string, string> = {
   'chalk-graph': 'graph',
@@ -45,6 +46,12 @@ export const SpecPlaceholder: Component<{ kind?: string }> = (props) => {
 export const SpecRenderError: Component<{ kind?: string; error: unknown }> = (props) => (
   <SpecErrors
     kind={friendlyKindName(props.kind) ?? 'untyped'}
-    errors={[props.kind ? String((props.error as Error)?.message ?? props.error) : 'The spec has no "kind".']}
+    errors={
+      !props.kind
+        ? ['The spec has no "kind".']
+        : props.error instanceof SpecValidationError
+          ? props.error.errors
+          : [String((props.error as Error)?.message ?? props.error)]
+    }
   />
 );

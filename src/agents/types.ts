@@ -1,5 +1,5 @@
 import type { JSX } from 'solid-js';
-import type { ChatMessage } from '../anthropic';
+import type { ChatMessage, GraphClickPoint } from '../anthropic';
 
 export type Skill = {
   name: string;
@@ -9,7 +9,7 @@ export type Skill = {
 
 export type HarnessProps = {
   message: ChatMessage;
-  onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
+  onGraphClick?: (points: GraphClickPoint[]) => void;
   onDrawSubmit?: (imageBase64: string) => void;
   onAnswerSubmit?: (answers: Record<string, string>) => void;
   previousAnswers?: Record<string, string>;

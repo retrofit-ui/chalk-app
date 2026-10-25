@@ -1,15 +1,33 @@
 import type { RootSpec } from '@retrofit-ui/core';
+import type { Angle, AngleUnit } from './coords';
+
+// Coordinates: every curve, point, vector and surface says which system its numbers are
+// in (`coords`, default "cartesian"); the grid it is drawn on is chosen separately.
+// Renderers resolve all of it to cartesian up front (resolveSpecs.ts).
+
+export type PlotGrid = 'cartesian' | 'polar';
+
+export type Point2D =
+  | { coords?: 'cartesian'; x: number; y: number }
+  | { coords: 'polar'; r: number; theta: Angle };
 
 export type CartesianCurve = {
+  coords?: 'cartesian';
   fn: string;
   label?: string;
 };
 
-export type LabelledPoint = {
-  x: number;
-  y: number;
-  label: string;
+/** r as a function of theta (radians), drawn over thetaDomain (default [0, 2π]). */
+export type PolarCurve = {
+  coords: 'polar';
+  r: string;
+  thetaDomain?: [Angle, Angle];
+  label?: string;
 };
+
+export type ChalkCurve = CartesianCurve | PolarCurve;
+
+export type LabelledPoint = Point2D & { label: string };
 
 export type ChalkGraphParam = {
   name: string;
@@ -22,8 +40,11 @@ export type ChalkGraphParam = {
 
 export type ChalkGraphSpec = {
   kind: 'chalk-graph';
-  graphType: 'cartesian';
-  curves: CartesianCurve[];
+  /** Legacy; "polar" is read as `grid: "polar"` when `grid` is absent. */
+  graphType?: 'cartesian' | 'polar';
+  grid?: PlotGrid;
+  angleUnit?: AngleUnit;
+  curves: ChalkCurve[];
   points?: LabelledPoint[];
   xDomain?: [number, number];
   yDomain?: [number, number];
@@ -35,6 +56,8 @@ export type ChalkGraphSpec = {
 
 export type ChalkDrawSpec = {
   kind: 'chalk-draw';
+  grid?: PlotGrid;
+  angleUnit?: AngleUnit;
   xDomain?: [number, number];
   yDomain?: [number, number];
   title?: string;
@@ -86,8 +109,21 @@ export type ChalkAnswerBoxSpec = {
 
 export type Vec3 = [number, number, number];
 
+/** A 3D position: a bare [x, y, z], or explicit cartesian/cylindrical/spherical coordinates. */
+export type Point3D =
+  | Vec3
+  | { coords: 'cartesian'; x: number; y: number; z: number }
+  | { coords: 'cylindrical'; r: number; azimuth: Angle; z: number }
+  | { coords: 'spherical'; rho: number; polar: Angle; azimuth: Angle };
+
+/** A vector's components along the cartesian axes or along the local basis at its tail. */
+export type VectorComponents3D =
+  | { coords: 'cartesian'; x: number; y: number; z: number }
+  | { coords: 'cylindrical-basis'; radial: number; azimuthal: number; z: number }
+  | { coords: 'spherical-basis'; radial: number; polar: number; azimuthal: number };
+
 export type Chalk3DPlane = {
-  point: Vec3;
+  point: Point3D;
   basis1: Vec3;
   basis2: Vec3;
   label?: string;
@@ -97,34 +133,52 @@ export type Chalk3DPlane = {
 
 export type Chalk3DPoint = {
   id: string;
-  position: Vec3;
+  position: Point3D;
   label?: string;
   colorIndex?: number;
   draggable?: boolean;
 };
 
 export type Chalk3DVector = {
-  from: Vec3;
-  to: Vec3;
+  from: Point3D;
+  /** Give either `to` or `components`. */
+  to?: Point3D;
+  components?: VectorComponents3D;
+  /** Draw the local unit basis at `from` (for cylindrical-/spherical-basis components). */
+  showBasis?: boolean;
   label?: string;
   colorIndex?: number;
   style?: 'solid' | 'dashed';
 };
 
-export type Chalk3DSurface = {
-  fn: string; // two-variable mathjs expression, e.g. "(x-1)^2 + 2*(y+0.5)^2"
+type SurfaceStyle = {
   label?: string;
-  xDomain?: [number, number]; // default [-3, 3]
-  yDomain?: [number, number]; // default [-3, 3]
   resolution?: number; // samples per axis, default 40, clamped to 80
   colorScale?: 'sequential' | 'diverging'; // by z-height, same convention as ChalkMatrixSpec; default sequential
   opacity?: number; // default 0.85
   wireframe?: boolean; // default false
 };
 
+// The key of the solved coordinate (fn/z, r, rho) is what fixes the form.
+export type Chalk3DSurface = SurfaceStyle &
+  (
+    | {
+        coords?: 'cartesian';
+        fn: string; // two-variable mathjs expression, e.g. "(x-1)^2 + 2*(y+0.5)^2"
+        xDomain?: [number, number]; // default [-3, 3]
+        yDomain?: [number, number]; // default [-3, 3]
+      }
+    /** z = f(r, azimuth): a height map over a disc. */
+    | { coords: 'cylindrical'; z: string; rDomain?: [number, number]; azimuthDomain?: [Angle, Angle] }
+    /** r = f(azimuth, z): distance out from the z-axis. */
+    | { coords: 'cylindrical'; r: string; azimuthDomain?: [Angle, Angle]; zDomain?: [number, number] }
+    /** rho = f(polar, azimuth): distance out from the origin. */
+    | { coords: 'spherical'; rho: string; polarDomain?: [Angle, Angle]; azimuthDomain?: [Angle, Angle] }
+  );
+
 export type Chalk3DPath = {
   id: string;
-  points: Vec3[]; // ordered waypoints, agent-provided (e.g. gradient descent steps) — never computed by the renderer
+  points: Point3D[]; // ordered waypoints, agent-provided (e.g. gradient descent steps) — never computed by the renderer
   label?: string;
   colorIndex?: number;
   showMarkers?: boolean; // default true
@@ -140,13 +194,24 @@ export type ChalkGraph3DSpec = {
   surfaces?: Chalk3DSurface[];
   paths?: Chalk3DPath[];
   showAxes?: boolean;
+  /** Floor grid in z = 0; default "none". */
+  grid?: 'none' | PlotGrid;
+  angleUnit?: AngleUnit;
   size?: 'small' | 'medium' | 'large';
 };
 
-export type ChalkVector2D = {
+/** Components: cartesian, polar (magnitude + direction), or along r̂/θ̂ at the tail. */
+export type VectorComponents2D =
+  | { coords?: 'cartesian'; x: number; y: number }
+  | { coords: 'polar'; r: number; theta: Angle }
+  | { coords: 'polar-basis'; radial: number; tangential: number };
+
+export type ChalkVector2D = VectorComponents2D & {
   id: string;
-  x: number;
-  y: number;
+  /** Explicit tail; overrides `compose` for this vector. */
+  at?: Point2D;
+  /** Draw the unit r̂ and θ̂ at the tail. */
+  showBasis?: boolean;
   label?: string;
   colorIndex?: number;
 };
@@ -156,6 +221,8 @@ export type ChalkVectorsSpec = {
   title?: string;
   vectors: ChalkVector2D[];
   compose?: 'origin' | 'head-to-tail';
+  grid?: PlotGrid;
+  angleUnit?: AngleUnit;
   xDomain?: [number, number];
   yDomain?: [number, number];
   size?: 'small' | 'medium' | 'large';

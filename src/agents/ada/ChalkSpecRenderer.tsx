@@ -17,6 +17,7 @@ import {
 import { createStore } from 'solid-js/store';
 import { SpecRenderer } from '@retrofit-ui/spa-solid-shoelace/components';
 import type { RootSpec } from '@retrofit-ui/core';
+import type { GraphClickPoint } from '../../anthropic';
 import type {
   ChalkViewSpec,
   ChalkGraphSpec,
@@ -49,7 +50,7 @@ import { SpecPlaceholder, SpecRenderError } from './SpecPlaceholder';
 
 type ViewNodeProps = {
   spec: { kind: string } & Record<string, unknown>;
-  onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
+  onGraphClick?: (points: GraphClickPoint[]) => void;
   onDrawSubmit?: (imageBase64: string) => void;
 };
 
@@ -295,7 +296,7 @@ const Drawn: Component<{ render: () => JSX.Element; onDrawn: () => void }> = (pr
 
 const ChalkSpecRenderer: Component<{
   chunks: ChalkViewSpec[];
-  onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
+  onGraphClick?: (points: GraphClickPoint[]) => void;
   onDrawSubmit?: (imageBase64: string) => void;
   onAnswerSubmit?: (answers: Record<string, string>) => void;
   /** The reply is still arriving: answerbox ids may be incomplete, so hold Submit back. */

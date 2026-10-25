@@ -134,12 +134,19 @@ export function visibleText(content: MessageContent): string {
     .join('\n\n');
 }
 
+export type GraphClickPoint = {
+  x: number;
+  y: number;
+  /** Present when the click landed on a polar grid. `theta` is in radians. */
+  polar?: { r: number; theta: number; angleUnit: 'radians' | 'degrees' };
+};
+
 export type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: MessageContent;
   kind?: 'graph-click' | 'draw-submission' | 'answer-submit' | 'tool-use' | 'tool-result';
-  graphClickData?: { points: Array<{ x: number; y: number }> };
+  graphClickData?: { points: GraphClickPoint[] };
   drawSubmissionData?: { imageBase64: string };
   answerData?: { answers: Record<string, string> };
   toolUseData?: { calls: Array<{ id: string; name: string; input: unknown }> };

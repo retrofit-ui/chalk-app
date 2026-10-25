@@ -106,8 +106,8 @@ in scope, not just `r = f(θ)` curves.
   `{coords: "spherical", rho, polar, azimuth}`.
 - Vectors: `{ from, to }` (unchanged) or `{ from, components }` where
   `components` is `{coords: "cartesian", x, y, z}`,
-  `{coords: "cylindrical-basis", r, azimuth, z}` (along r̂, φ̂, ẑ at `from`)
-  or `{coords: "spherical-basis", rho, polar, azimuth}` (along r̂, θ̂, φ̂ at
+  `{coords: "cylindrical-basis", radial, azimuthal, z}` (along r̂, φ̂, ẑ at `from`)
+  or `{coords: "spherical-basis", radial, polar, azimuthal}` (along r̂, θ̂, φ̂ at
   `from`). `showBasis?: true` draws the local unit basis at `from`.
 - Surfaces — the solved variable's key makes the form explicit:
   - `{ fn, xDomain, yDomain }` — z = f(x, y), unchanged (existing pipeline

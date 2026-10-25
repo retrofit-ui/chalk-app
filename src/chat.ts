@@ -10,9 +10,11 @@ import {
   thinkingConfig,
   type ChatMessage,
   type ContentBlock,
+  type GraphClickPoint,
 } from './anthropic';
 import { deriveTitle, type Conversation } from './conversations';
 import type { Agent } from './agents/types';
+import { formatClickPoint } from './agents/ada/coords';
 
 export const MAX_TOOL_ROUNDS = 4;
 
@@ -231,10 +233,10 @@ export async function sendMessage(userMsg: Omit<ChatMessage, 'id'>, deps: SendMe
   }
 }
 
-export function buildGraphClickMessage(points: Array<{ x: number; y: number }>): Omit<ChatMessage, 'id'> {
+export function buildGraphClickMessage(points: GraphClickPoint[]): Omit<ChatMessage, 'id'> {
   const summary = points.length === 1
-    ? `I clicked the point (${points[0].x}, ${points[0].y}) on the graph.`
-    : `I clicked the following points on the graph:\n${points.map((p) => `- (${p.x}, ${p.y})`).join('\n')}`;
+    ? `I clicked the point ${formatClickPoint(points[0])} on the graph.`
+    : `I clicked the following points on the graph:\n${points.map((p) => `- ${formatClickPoint(p)}`).join('\n')}`;
   return {
     role: 'user',
     content: summary,

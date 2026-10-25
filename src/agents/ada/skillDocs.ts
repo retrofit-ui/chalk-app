@@ -2,6 +2,7 @@ import automatonDoc from './statemachines/docs/chalk-automaton.md?raw';
 import searchDoc from './statemachines/docs/chalk-search.md?raw';
 import markovDoc from './statemachines/docs/chalk-markov.md?raw';
 import mdpDoc from './statemachines/docs/chalk-mdp.md?raw';
+import coordinatesDoc from './docs/coordinates.md?raw';
 
 export type AdaSkillKind =
   | 'chalk-graph'
@@ -42,7 +43,6 @@ To render a graph, emit a fenced code block with the language tag \`chalk-spec\`
 \`\`\`chalk-spec
 {
   "kind": "chalk-graph",
-  "graphType": "cartesian",
   "curves": [
     { "fn": "sin(x)", "label": "sin(x)" }
   ],
@@ -56,7 +56,6 @@ You may also mark specific points on the graph with labels — useful for highli
 \`\`\`chalk-spec
 {
   "kind": "chalk-graph",
-  "graphType": "cartesian",
   "curves": [{ "fn": "x^2 - 1" }],
   "points": [
     { "x": 1, "y": 0, "label": "(1, 0)" },
@@ -70,7 +69,7 @@ You may also mark specific points on the graph with labels — useful for highli
 
 Graph rules:
 - \`fn\` uses mathjs expression syntax: x^2, sin(x), exp(x), sqrt(x), abs(x), log(x), etc.
-- \`graphType\` must always be "cartesian"
+- \`grid\`: "cartesian" (default) or "polar" — see **Polar curves** below
 - \`size\`: "small", "medium" (default), or "large" — use "large" for a diagram that deserves full attention, "small" for a compact aside
 - You may include multiple curves in one graph to compare functions visually
 - Use \`points\` to label intercepts, critical points, or any value worth calling out
@@ -86,7 +85,6 @@ Graph rules:
 \`\`\`chalk-spec
 {
   "kind": "chalk-graph",
-  "graphType": "cartesian",
   "curves": [{ "fn": "x^2 + lambda", "label": "x² + λ" }],
   "params": [
     { "name": "lambda", "min": 0, "max": 10, "default": 0, "step": 0.1, "label": "λ" }
@@ -101,7 +99,29 @@ Graph rules:
 - \`min\`/\`max\`/\`default\` are required; \`step\` defaults to \`(max-min)/100\`; \`label\` defaults to \`name\` and is shown next to the slider.
 - You may declare multiple params, each referenced independently across one or more curves.
 - \`params\` and \`interactive\` (click-to-mark) are independent — a graph can use either, both, or neither.
-- Labelled \`points\` do not currently react to \`params\` — their coordinates are fixed numbers, not expressions.`,
+- Labelled \`points\` do not currently react to \`params\` — their coordinates are fixed numbers, not expressions.
+
+**Polar curves and the polar grid**: give a curve \`"coords": "polar"\` and \`"r"\` as a function of \`theta\`; give points \`"coords": "polar"\` with \`r\` and \`theta\`; set \`"grid": "polar"\` for rings and spokes instead of squares:
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-graph",
+  "grid": "polar",
+  "curves": [
+    { "coords": "polar", "r": "1 + cos(theta)", "label": "r = 1 + cos θ" }
+  ],
+  "points": [
+    { "coords": "polar", "r": 2, "theta": 0, "label": "(2, 0)" },
+    { "coords": "polar", "r": 1, "theta": "pi/2", "label": "(1, π/2)" }
+  ],
+  "title": "A cardioid"
+}
+\`\`\`
+
+- A polar curve draws over \`"thetaDomain"\` (default \`[0, "2*pi"]\`) — widen it for spirals (\`"r": "theta/4", "thetaDomain": [0, "6*pi"]\`), narrow it for a single petal. Slider \`params\` work in \`r\` exactly as in \`fn\`.
+- With a polar grid and no \`xDomain\`/\`yDomain\`, the view is fitted to the polar curves and points; give domains to frame it yourself.
+- Cartesian curves (\`fn\` in \`x\`) and polar curves can share one graph, on either grid — e.g. a polar curve on cartesian axes when teaching the conversion.
+- On a polar grid, \`interactive\` clicks arrive with both readings: \`(r = 3, θ = π/3) ≈ (1.5, 2.6)\` (θ in the spec's \`angleUnit\`).`,
 
   'chalk-draw': `## chalk-draw
 
@@ -117,7 +137,9 @@ Graph rules:
 }
 \`\`\`
 
-The student draws freehand on a coordinate grid and submits an image. You will receive their drawing as an image — look at the shape they drew and give specific feedback on what's right, what's wrong, and why. Use this for: sketching functions from memory, drawing geometric constructions, illustrating transformations, or any conceptual diagram. Supports \`"size"\`: "small", "medium" (default), or "large".`,
+The student draws freehand on a coordinate grid and submits an image. You will receive their drawing as an image — look at the shape they drew and give specific feedback on what's right, what's wrong, and why. Use this for: sketching functions from memory, drawing geometric constructions, illustrating transformations, or any conceptual diagram. Supports \`"size"\`: "small", "medium" (default), or "large".
+
+Add \`"grid": "polar"\` (and optionally \`"angleUnit": "degrees"\`) for rings and spokes instead of squares — e.g. "sketch r = 2 sin θ". The grid is in the image you receive, so you can read their sketch against it.`,
 
   'chalk-sets': `## chalk-sets
 
@@ -232,7 +254,57 @@ Sets rules:
 - \`paths[].points\` is an ordered list of \`[x, y, z]\` waypoints that **you must compute and provide** — the renderer only draws the polyline and marker spheres you give it; it never runs gradient descent (or any other iterative solve) itself. Compute the trajectory yourself (e.g. a few steps of gradient descent on the same \`fn\`) and pass the resulting points.
 - \`paths[].showMarkers\` (default true) draws a small sphere at each waypoint; \`paths[].animate: true\` additionally animates a marker traveling once along the path when it first renders — good for narrating "watch it descend," but the path itself is always fully visible regardless of \`animate\`.
 - Combine with regular \`points\`/\`vectors\` as usual — e.g. marking the start and the minimum, as in the example above.
-- Use for: loss landscapes, gradient descent / optimization trajectories, visualizing a two-variable function's shape — not for single-variable curves (\`chalk-graph\`) or abstract vector decomposition (\`chalk-vectors\`).`,
+- Use for: loss landscapes, gradient descent / optimization trajectories, visualizing a two-variable function's shape — not for single-variable curves (\`chalk-graph\`) or abstract vector decomposition (\`chalk-vectors\`).
+
+**Cylindrical and spherical coordinates**: z points up. Anywhere a position goes (\`points[].position\`, \`vectors[].from\`/\`to\`, \`paths[].points\`, \`planes[].point\`) you may write \`[x, y, z]\` or an object: \`{ "coords": "cylindrical", "r": 2, "azimuth": "pi/3", "z": 1 }\` or \`{ "coords": "spherical", "rho": 2, "polar": "pi/4", "azimuth": 0 }\`.
+
+Surfaces come in four forms; the key of the solved coordinate says which:
+- \`{ "fn": "…x, y…" }\` — z = f(x, y), as above.
+- \`{ "coords": "cylindrical", "z": "exp(-r^2)" }\` — z = f(r, azimuth): a height map over a disc. \`rDomain\` default \`[0, 3]\`, \`azimuthDomain\` default \`[0, "2*pi"]\`.
+- \`{ "coords": "cylindrical", "r": "1 + z^2/4" }\` — r = f(azimuth, z): distance from the z-axis (\`"r": "2"\` is a can). \`zDomain\` default \`[-2, 2]\`.
+- \`{ "coords": "spherical", "rho": "sin(polar)^2" }\` — rho = f(polar, azimuth): distance from the origin (\`"rho": "2"\` is a sphere). \`polarDomain\` default \`[0, "pi"]\`.
+
+The expression may use only the other two coordinates' names (plus \`pi\`, \`e\`); a wedge or cutaway is just a narrower domain. Points where it isn't finite (a pole of \`1/sin(polar)\`) are left out rather than failing the surface. \`resolution\`, \`colorScale\` (applied to the solved coordinate), \`opacity\`, \`wireframe\` and \`label\` work as for \`fn\` surfaces.
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-graph3d",
+  "title": "Dipole radiation pattern",
+  "grid": "polar",
+  "surfaces": [
+    { "coords": "spherical", "rho": "2*sin(polar)^2", "label": "power ∝ sin²θ" }
+  ],
+  "vectors": [
+    { "from": [0, 0, -1], "to": [0, 0, 1], "label": "dipole" }
+  ]
+}
+\`\`\`
+
+A vector can give \`"components"\` instead of \`"to"\`, along the local basis at its \`from\` point — \`{ "coords": "cylindrical-basis", "radial": …, "azimuthal": …, "z": … }\` or \`{ "coords": "spherical-basis", "radial": …, "polar": …, "azimuthal": … }\` (or \`{ "coords": "cartesian", "x", "y", "z" }\`). Add \`"showBasis": true\` to draw that unit basis at \`from\`. The basis is undefined on the z-axis, so keep \`from\` off it.
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-graph3d",
+  "title": "Velocity on a spinning disc",
+  "grid": "polar",
+  "surfaces": [
+    { "coords": "cylindrical", "z": "0", "rDomain": [0, 3], "opacity": 0.3, "label": "disc" }
+  ],
+  "points": [
+    { "id": "p", "position": { "coords": "cylindrical", "r": 2, "azimuth": "pi/3", "z": 0 }, "label": "p" }
+  ],
+  "vectors": [
+    {
+      "from": { "coords": "cylindrical", "r": 2, "azimuth": "pi/3", "z": 0 },
+      "components": { "coords": "cylindrical-basis", "radial": 0, "azimuthal": 1.5, "z": 0 },
+      "showBasis": true,
+      "label": "v = ωr φ̂"
+    }
+  ]
+}
+\`\`\`
+
+- \`"grid"\`: \`"none"\` (default), \`"cartesian"\` or \`"polar"\` — a floor grid in the z = 0 plane; polar rings also cover any polar height map's disc.`,
 
   'chalk-vectors': `## chalk-vectors
 
@@ -255,7 +327,28 @@ Sets rules:
 - \`compose: "head-to-tail"\` (as above) chains each vector from the tip of the previous one — the final tip lands at the sum of all vectors, which is exactly right for decompositions like y = ŷ + e.
 - \`compose: "origin"\` (default) draws every vector from (0,0) instead — better for comparing several vectors' magnitude/direction directly (e.g. showing y, ŷ, and e all relative to the same origin).
 - Add enough \`xDomain\`/\`yDomain\` padding that every arrow tip and label sits comfortably inside the viewport (defaults to \`[-5, 5]\` on both axes if omitted).
-- Use for: vector addition/subtraction, decomposition (y = ŷ + e), basis combinations in 2D — not for 3D scenes (\`chalk-graph3d\`) or function curves (\`chalk-graph\`).`,
+- Use for: vector addition/subtraction, decomposition (y = ŷ + e), basis combinations in 2D — not for 3D scenes (\`chalk-graph3d\`) or function curves (\`chalk-graph\`).
+
+**Polar vectors and the local r̂/θ̂ basis** (circular motion, central forces): a vector's components can be \`"coords": "polar"\` (\`r\` = magnitude, \`theta\` = direction) or \`"coords": "polar-basis"\` (\`radial\` along r̂ and \`tangential\` along θ̂, **at the vector's tail**). \`"at"\` sets a tail explicitly — a point \`{ "x", "y" }\` or \`{ "coords": "polar", "r", "theta" }\` — overriding \`compose\` for that vector; \`"showBasis": true\` draws the unit r̂ and θ̂ there.
+
+\`\`\`chalk-spec
+{
+  "kind": "chalk-vectors",
+  "grid": "polar",
+  "title": "Uniform circular motion at θ = π/4",
+  "vectors": [
+    { "id": "pos", "coords": "polar", "r": 2, "theta": "pi/4", "label": "r" },
+    { "id": "v", "coords": "polar-basis", "radial": 0, "tangential": 1.5, "at": { "coords": "polar", "r": 2, "theta": "pi/4" }, "showBasis": true, "label": "v" },
+    { "id": "a", "coords": "polar-basis", "radial": -1.1, "tangential": 0, "at": { "coords": "polar", "r": 2, "theta": "pi/4" }, "label": "a" }
+  ],
+  "xDomain": [-3, 3],
+  "yDomain": [-3, 3]
+}
+\`\`\`
+
+- r̂ and θ̂ are undefined at the origin, so a \`"polar-basis"\` vector (or \`showBasis\`) needs a tail elsewhere — give it an \`at\`.
+- \`"grid": "polar"\` draws rings and spokes; with no \`xDomain\`/\`yDomain\` the view is fitted to every arrow.
+- With \`compose: "head-to-tail"\`, the chain continues from each vector's tip, including vectors placed with \`at\`.`,
 
   'chalk-matrix': `## chalk-matrix
 
@@ -461,6 +554,11 @@ Card for a theorem or definition (use text, not stat — the formula renders in 
 \`\`\``,
 };
 
+export const COORDINATES_DOC = coordinatesDoc.trim();
+
+/** Kinds whose docs refer to the shared Coordinates section, appended once per request. */
+export const COORDINATE_KINDS: AdaSkillKind[] = ['chalk-graph', 'chalk-draw', 'chalk-graph3d', 'chalk-vectors'];
+
 export function getSkillDocs(kinds: string[]): string {
   const seen = new Set<string>();
   const parts: string[] = [];
@@ -476,6 +574,8 @@ export function getSkillDocs(kinds: string[]): string {
       unknown.push(kind);
     }
   }
+
+  if (kinds.some((k) => (COORDINATE_KINDS as string[]).includes(k))) parts.push(COORDINATES_DOC);
 
   if (unknown.length > 0) {
     parts.push(`Unknown kind(s): ${unknown.join(', ')}. Valid kinds: ${SKILL_KINDS.join(', ')}.`);

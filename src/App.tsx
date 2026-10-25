@@ -11,6 +11,7 @@ import {
   supportsEffort,
   type ChatMessage,
   type Effort,
+  type GraphClickPoint,
 } from './anthropic';
 import {
   deleteConversation,
@@ -249,7 +250,7 @@ const App: Component = () => {
     void sendMessage({ role: 'user', content: text });
   };
 
-  const onGraphClick = (points: Array<{ x: number; y: number }>) => {
+  const onGraphClick = (points: GraphClickPoint[]) => {
     void sendMessage(buildGraphClickMessage(points));
   };
 

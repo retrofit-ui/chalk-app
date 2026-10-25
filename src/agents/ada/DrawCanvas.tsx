@@ -1,8 +1,13 @@
 import { type Component, onMount } from 'solid-js';
 import type { ChalkDrawSpec } from './spec';
+import { resolveDraw } from './resolveSpecs';
+import { equalScaleDomains, formatAngle, polarGrid, polarToCartesian, spokeLabelPoint } from './coords';
 
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 420;
+
+// Under a polar grid the angle labels ring the border; axis numbers this close to it would collide.
+const EDGE_CLEARANCE = 24;
 
 const SIZE_MAX_WIDTH: Record<string, number> = { small: 320, medium: 640, large: 900 };
 
@@ -15,8 +20,15 @@ const DrawCanvas: Component<{
   let lastX = 0;
   let lastY = 0;
 
-  const xDomain = () => props.spec.xDomain ?? [-5, 5];
-  const yDomain = () => props.spec.yDomain ?? [-5, 5];
+  // Throws a SpecValidationError for a bad spec; ChalkSpecRenderer shows it.
+  const resolved = resolveDraw(props.spec);
+  const polar = resolved.grid === 'polar';
+  // The canvas isn't square: a polar grid needs equal scale on both axes or its rings are ellipses.
+  const domains = polar
+    ? equalScaleDomains(resolved.xDomain, resolved.yDomain, CANVAS_WIDTH, CANVAS_HEIGHT)
+    : { xDomain: resolved.xDomain, yDomain: resolved.yDomain };
+  const xDomain = () => domains.xDomain;
+  const yDomain = () => domains.yDomain;
 
   const toPixelX = (x: number) => {
     const [x0, x1] = xDomain();
@@ -39,17 +51,19 @@ const DrawCanvas: Component<{
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    if (polar) drawPolarGrid(ctx);
+
     // Minor grid lines at every integer
     ctx.strokeStyle = '#f1f5f9';
     ctx.lineWidth = 1;
-    for (let x = Math.ceil(x0); x <= x1; x++) {
+    for (let x = Math.ceil(x0); x <= x1 && !polar; x++) {
       const px = toPixelX(x);
       ctx.beginPath();
       ctx.moveTo(px, 0);
       ctx.lineTo(px, CANVAS_HEIGHT);
       ctx.stroke();
     }
-    for (let y = Math.ceil(y0); y <= y1; y++) {
+    for (let y = Math.ceil(y0); y <= y1 && !polar; y++) {
       const py = toPixelY(y);
       ctx.beginPath();
       ctx.moveTo(0, py);
@@ -82,6 +96,7 @@ const DrawCanvas: Component<{
     for (let x = Math.ceil(x0); x <= x1; x++) {
       if (x === 0) continue;
       const px = toPixelX(x);
+      if (polar && (px < EDGE_CLEARANCE || px > CANVAS_WIDTH - EDGE_CLEARANCE)) continue;
       const labelY = Math.min(Math.max(axisY + 12, 12), CANVAS_HEIGHT - 4);
       ctx.fillText(String(x), px, labelY);
     }
@@ -89,9 +104,41 @@ const DrawCanvas: Component<{
     for (let y = Math.ceil(y0); y <= y1; y++) {
       if (y === 0) continue;
       const py = toPixelY(y);
+      if (polar && (py < EDGE_CLEARANCE || py > CANVAS_HEIGHT - EDGE_CLEARANCE)) continue;
       const labelX = Math.min(Math.max(axisX - 4, 20), CANVAS_WIDTH - 4);
       ctx.fillText(String(y), labelX, py + 4);
     }
+  };
+
+  // Rings and spokes (every π/6), with angle labels around the border. Drawn into the canvas,
+  // so the image Ada receives carries the grid too.
+  const drawPolarGrid = (ctx: CanvasRenderingContext2D) => {
+    const { rings, spokes, rMax } = polarGrid(xDomain(), yDomain());
+    const reach = rings[rings.length - 1] ?? rMax;
+    const pxPerUnit = CANVAS_WIDTH / (xDomain()[1] - xDomain()[0]);
+    const cx = toPixelX(0);
+    const cy = toPixelY(0);
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    for (const r of rings) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * pxPerUnit, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const theta of spokes) {
+      const [x, y] = polarToCartesian(reach, theta);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(toPixelX(x), toPixelY(y));
+      ctx.stroke();
+      const at = spokeLabelPoint(theta, xDomain(), yDomain(), 14 / pxPerUnit);
+      if (at) ctx.fillText(formatAngle(theta, resolved.angleUnit), toPixelX(at[0]), toPixelY(at[1]));
+    }
+    ctx.textBaseline = 'alphabetic';
   };
 
   onMount(() => {
@@ -146,7 +193,7 @@ const DrawCanvas: Component<{
   };
 
   return (
-    <div data-kind="chalk-draw" class="my-2 max-w-160" style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
+    <div data-kind="chalk-draw" data-grid={resolved.grid} class="my-2 max-w-160" style={{ 'max-width': `${SIZE_MAX_WIDTH[props.spec.size ?? 'medium']}px` }}>
       {props.spec.title && <div class="text-sm font-semibold text-slate-700 mb-1">{props.spec.title}</div>}
       {props.spec.prompt && <div class="text-sm text-slate-600 mb-2 italic">{props.spec.prompt}</div>}
       <canvas

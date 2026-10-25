@@ -1,18 +1,19 @@
 import { type Component, For, Show } from 'solid-js';
 import type { HarnessProps } from '../types';
-import { visibleText } from '../../anthropic';
+import { visibleText, type GraphClickPoint } from '../../anthropic';
+import { formatClickPoint } from './coords';
 import ChalkSpecRenderer from './ChalkSpecRenderer';
 import { findPreviousAnswers, parseChunks } from './chunkParser';
 
 export { findPreviousAnswers, parseChunks };
 
-const GraphClickEvent: Component<{ points: Array<{ x: number; y: number }> }> = (props) => (
+const GraphClickEvent: Component<{ points: GraphClickPoint[] }> = (props) => (
   <div class="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-300 rounded-lg py-1 px-2.5 font-mono self-start">
     <span class="text-sm text-slate-500">⊕</span>
     <span>
       {props.points.length === 1
-        ? `clicked (${props.points[0].x}, ${props.points[0].y})`
-        : `clicked ${props.points.length} points: ${props.points.map(p => `(${p.x}, ${p.y})`).join(', ')}`}
+        ? `clicked ${formatClickPoint(props.points[0])}`
+        : `clicked ${props.points.length} points: ${props.points.map(formatClickPoint).join(', ')}`}
     </span>
   </div>
 );

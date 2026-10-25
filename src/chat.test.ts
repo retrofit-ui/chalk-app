@@ -894,3 +894,10 @@ describe('buildAnswerSubmitMessage', () => {
     expect(msg.answerData).toEqual({ answers });
   });
 });
+
+describe('buildGraphClickMessage on a polar grid', () => {
+  it('gives the polar reading first, with the cartesian equivalent', () => {
+    const msg = buildGraphClickMessage([{ x: 1.5, y: 2.6, polar: { r: 3, theta: Math.PI / 3, angleUnit: 'radians' } }]);
+    expect(msg.content).toBe('I clicked the point (r = 3, θ = π/3) ≈ (1.5, 2.6) on the graph.');
+  });
+});

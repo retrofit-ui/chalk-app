@@ -2,10 +2,13 @@ import { type Component, createEffect, createSignal, onCleanup, onMount } from '
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import type { Chalk3DPlane, Chalk3DPoint, Chalk3DVector, ChalkGraph3DSpec, Vec3 } from './spec';
+import type { ChalkGraph3DSpec, Vec3 } from './spec';
 import { color } from './palette';
 import { cellRgb } from './colorScale';
 import { clampResolution, sampleSurface } from './surfaceSampler';
+import { sampleCurvilinear } from './curvilinearSurface';
+import { resolveScene, type ResolvedScene } from './resolveSpecs';
+import { formatAngle, polarGrid, polarToCartesian } from './coords';
 
 const SIZE_MAX_WIDTH: Record<string, number> = { small: 320, medium: 560, large: 820 };
 const ASPECT = 3 / 4; // height = width * ASPECT
@@ -67,7 +70,55 @@ type PathAnimation = {
 
 const PATH_ANIMATION_DURATION_MS = 2500;
 
+const FLOOR_GRID_COLOR = '#cbd5e1';
+const BASIS_COLOR = '#94a3b8';
+const DEFAULT_FLOOR_RADIUS = 4; // matches the AxesHelper length
+
+// A floor grid in z = 0 (the xy-plane): integer squares, or rings + spokes every π/6.
+function buildFloorGrid(
+  grid: ResolvedScene['grid'],
+  radius: number,
+  angleUnit: ResolvedScene['angleUnit'],
+): { objects: THREE.Object3D[]; disposables: Disposable[]; labels: CSS2DObject[] } {
+  const segments: number[] = [];
+  const labels: CSS2DObject[] = [];
+  if (grid === 'cartesian') {
+    for (let k = -radius; k <= radius; k++) {
+      segments.push(k, -radius, 0, k, radius, 0, -radius, k, 0, radius, k, 0);
+    }
+  } else if (grid === 'polar') {
+    const { rings, spokes } = polarGrid([-radius, radius], [-radius, radius]);
+    const reach = rings.filter((r) => r <= radius).at(-1) ?? radius;
+    const STEPS = 96;
+    for (const r of rings.filter((ring) => ring <= radius)) {
+      for (let k = 0; k < STEPS; k++) {
+        const [x1, y1] = polarToCartesian(r, (k * 2 * Math.PI) / STEPS);
+        const [x2, y2] = polarToCartesian(r, ((k + 1) * 2 * Math.PI) / STEPS);
+        segments.push(x1, y1, 0, x2, y2, 0);
+      }
+    }
+    for (const theta of spokes) {
+      const [x, y] = polarToCartesian(reach, theta);
+      segments.push(0, 0, 0, x, y, 0);
+      const label = makeLabel(formatAngle(theta, angleUnit), BASIS_COLOR);
+      label.element.style.fontWeight = '400';
+      label.element.style.fontSize = '10px';
+      label.element.style.transform = 'translate(-50%, -50%)';
+      label.position.set(...polarToCartesian(reach * 1.12, theta), 0);
+      labels.push(label);
+    }
+  }
+  if (!segments.length) return { objects: [], disposables: [], labels };
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(segments, 3));
+  const mat = new THREE.LineBasicMaterial({ color: FLOOR_GRID_COLOR, transparent: true, opacity: 0.7 });
+  return { objects: [new THREE.LineSegments(geo, mat), ...labels], disposables: [geo, mat], labels };
+}
+
 const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
+  // Every position resolved to cartesian up front; throws a SpecValidationError for a bad
+  // spec, which ChalkSpecRenderer shows. A changed spec remounts this component.
+  const resolved = resolveScene(props.spec);
   let el!: HTMLDivElement;
   let scene!: THREE.Scene;
   let camera!: THREE.PerspectiveCamera;
@@ -100,7 +151,8 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
 
   // Re-seed the live drag position whenever the spec itself changes (not when we drag it ourselves).
   createEffect(() => {
-    const dp = (props.spec.points ?? []).find((p) => p.draggable);
+    void props.spec;
+    const dp = resolved.points.find((p) => p.draggable);
     setDragPos(dp ? [...dp.position] : null);
   });
 
@@ -175,7 +227,10 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
     const h0 = Math.round(w0 * ASPECT);
 
     camera = new THREE.PerspectiveCamera(50, w0 / h0, 0.1, 1000);
-    camera.position.set(5, 4, 7);
+    // z is up: specs give heights as z (z = f(x, y), cylinders along z). three.js defaults to
+    // y-up, which laid every surface on its side. Set before OrbitControls, which reads it.
+    camera.up.set(0, 0, 1);
+    camera.position.set(7, 5, 4.5);
     camera.lookAt(0, 0, 0);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -252,6 +307,52 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
     });
   });
 
+  // A cylindrical/spherical surface: an indexed mesh over its (u, v) grid, coloured by the
+  // solved coordinate, with its own coordinate lines (circles, meridians) as the wire overlay.
+  const addCurvilinearSurface = (s: Extract<ResolvedScene['surfaces'][number], { kind: 'curvilinear' }>, i: number) => {
+    const style = s.surface;
+    const result = sampleCurvilinear(s.input, style.resolution ?? 40);
+    if (!result.ok) {
+      console.warn(`[Scene3D] skipping surface "${s.input.expr}": ${result.error}`);
+      return;
+    }
+    const { positions, values, valid, indices, valueMin, valueMax, wire } = result.mesh;
+    const scale = style.colorScale ?? 'sequential';
+    const c = color(i);
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const colors = new Float32Array(values.length * 3);
+    values.forEach((v, idx) => {
+      const [r, g, b] = cellRgb(valid[idx] ? v : valueMin, valueMin, valueMax, scale);
+      colors.set([r / 255, g / 255, b / 255], idx * 3);
+    });
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.setIndex(indices);
+    staticDisposables.push(geo);
+
+    if (!style.wireframe) {
+      const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: style.opacity ?? 0.85, side: THREE.DoubleSide });
+      staticGroup.add(new THREE.Mesh(geo, mat));
+      staticDisposables.push(mat);
+    }
+
+    const wireGeo = new THREE.BufferGeometry();
+    wireGeo.setAttribute('position', new THREE.Float32BufferAttribute(wire, 3));
+    const wireMat = new THREE.LineBasicMaterial({ color: c, transparent: !style.wireframe, opacity: style.wireframe ? 1 : 0.5 });
+    staticGroup.add(new THREE.LineSegments(wireGeo, wireMat));
+    staticDisposables.push(wireGeo, wireMat);
+
+    if (style.label) {
+      const validIdx = valid.map((ok, idx) => (ok ? idx : -1)).filter((idx) => idx >= 0);
+      const mid = validIdx[Math.floor(validIdx.length / 2)];
+      const label = makeLabel(style.label, c);
+      label.position.set(positions[mid * 3], positions[mid * 3 + 1], positions[mid * 3 + 2]);
+      staticGroup.add(label);
+      staticLabels.push(label);
+    }
+  };
+
   // --- Static content effect -------------------------------------------------------------
   // Rebuilds everything that is derived purely from the spec's static fields: planes, surfaces,
   // paths, and the axes gizmo. Deliberately does NOT read `dragPos()` — that's the whole point.
@@ -265,9 +366,7 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
 
     clearStatic();
 
-    const planes = spec.planes ?? [];
-    const surfaces = spec.surfaces ?? [];
-    const paths = spec.paths ?? [];
+    const { planes, surfaces, paths } = resolved;
 
     // Planes
     planes.forEach((plane, i) => {
@@ -303,7 +402,12 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
 
     // Surfaces (loss landscapes, etc.) — a failed sample (bad mathjs expression) skips just that
     // surface, with a console.warn, rather than throwing and blanking the whole scene.
-    surfaces.forEach((surface, i) => {
+    surfaces.forEach((resolvedSurface, i) => {
+      if (resolvedSurface.kind === 'curvilinear') {
+        addCurvilinearSurface(resolvedSurface, i);
+        return;
+      }
+      const surface = resolvedSurface.surface;
       const xDomain = surface.xDomain ?? [-3, 3];
       const yDomain = surface.yDomain ?? [-3, 3];
       const resolution = clampResolution(surface.resolution ?? 40);
@@ -419,6 +523,16 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
       }
     });
 
+    // Floor grid (z = 0), sized to cover any polar height map's disc
+    const floorRadius = Math.max(
+      DEFAULT_FLOOR_RADIUS,
+      ...surfaces.map((s) => (s.kind === 'curvilinear' && s.input.form === 'cylindrical-z' ? Math.ceil(Math.abs(s.input.uDomain[1])) : 0)),
+    );
+    const floor = buildFloorGrid(resolved.grid, floorRadius, resolved.angleUnit);
+    for (const o of floor.objects) staticGroup.add(o);
+    staticDisposables.push(...floor.disposables);
+    staticLabels.push(...floor.labels);
+
     // Axes
     if (spec.showAxes !== false) {
       const axes = new THREE.AxesHelper(4);
@@ -439,16 +553,16 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
   // before the surface/path work. This is the only effect that reads `dragPos()`, so it's the
   // only one that reruns on every drag frame; it only ever touches `dynamicGroup`.
   createEffect(() => {
-    const spec = props.spec;
+    void props.spec;
     const live = dragPos();
     if (!scene) return; // guard first run before onMount has initialized three.js
 
     clearDynamic();
     draggableMesh = null;
 
-    const points = spec.points ?? [];
-    const explicitVectors = spec.vectors ?? [];
-    const planes = spec.planes ?? []; // read-only here: plane *meshes* live in the static effect above
+    const points = resolved.points;
+    const explicitVectors = resolved.vectors;
+    const planes = resolved.planes; // read-only here: plane *meshes* live in the static effect above
 
     // Points
     points.forEach((p, i) => {
@@ -493,6 +607,17 @@ const Scene3D: Component<{ spec: ChalkGraph3DSpec }> = (props) => {
         label.position.copy(mid);
         dynamicGroup.add(label);
         dynamicLabels.push(label);
+      }
+
+      // The local unit basis (r̂ φ̂ ẑ or r̂ θ̂ φ̂) at the tail, for basis-component vectors.
+      for (const b of vec.basis ?? []) {
+        const basisArrow = new THREE.ArrowHelper(v3(b.dir), from, 1, muted(BASIS_COLOR, 0.2), 0.2, 0.12);
+        dynamicGroup.add(basisArrow);
+        dynamicDisposables.push({ dispose: () => disposeArrow(basisArrow) });
+        const basisLabel = makeLabel(b.label, BASIS_COLOR);
+        basisLabel.position.copy(from.clone().add(v3(b.dir).multiplyScalar(1.15)));
+        dynamicGroup.add(basisLabel);
+        dynamicLabels.push(basisLabel);
       }
     });
 

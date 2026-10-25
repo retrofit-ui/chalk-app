@@ -2,6 +2,17 @@ import { type Component, createEffect, createSignal, For, onCleanup, onMount, Sh
 import functionPlot from 'function-plot';
 import type { ChalkGraphParam, ChalkGraphSpec } from './spec';
 import { color } from './palette';
+import { resolveGraph } from './resolveSpecs';
+import {
+  cartesianToPolar,
+  equalScaleDomains,
+  formatAngle,
+  polarGrid,
+  polarToCartesian,
+  spokeLabelPoint,
+  type GraphClickPoint,
+  type V2,
+} from './coords';
 import './CartesianGraph.css';
 
 const FALLBACK_HEIGHT = 300;
@@ -12,14 +23,66 @@ const SIZE_MAX_WIDTH: Record<string, number> = { small: 320, medium: 640, large:
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// function-plot's fixed margins (chart.js); the plot area is what must be equal-scaled.
+const MARGIN_X = 40 + 20;
+const MARGIN_Y = 20 + 20;
+
+const GRID_COLOR = '#e2e8f0';
+// Slate-500, the axis tick colour. Set as an attr: function-plot's own `color` for text is
+// drawn brightened by 1.5, and its text is left-anchored, which clips labels on the right.
+const GRID_LABEL_ATTR = { fill: '#64748b', 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-size': '0.7rem' };
+
+// function-plot's own parser knows PI but not pi or e, which models write constantly.
+const CONSTANTS_SCOPE = { pi: Math.PI, e: Math.E };
+
+/** Rings, spokes and angle labels as function-plot data, so pan/zoom keeps them aligned. */
+function polarGridData(xDomain: V2, yDomain: V2, angleUnit: 'radians' | 'degrees', labelInset: number) {
+  const { rings, spokes, rMax } = polarGrid(xDomain, yDomain);
+  const reach = rings[rings.length - 1] ?? rMax;
+  // Angle labels ring the border of the view; if the origin is out of view, they sit on the
+  // largest ring that is fully in view instead.
+  const inView = Math.min(-xDomain[0], xDomain[1], -yDomain[0], yDomain[1]);
+  const labelR = [...rings].reverse().find((r) => r <= inView * 0.92) ?? rings[0];
+  return [
+    ...rings.map((r) => ({
+      fnType: 'polar' as const,
+      r: String(r),
+      range: [0, 2 * Math.PI] as [number, number],
+      graphType: 'polyline' as const,
+      color: GRID_COLOR,
+      skipTip: true,
+      attr: { 'data-polar-ring': String(r) },
+    })),
+    ...spokes.map((theta) => ({
+      fnType: 'points' as const,
+      points: [[0, 0], polarToCartesian(reach, theta)],
+      graphType: 'polyline' as const,
+      color: GRID_COLOR,
+      skipTip: true,
+    })),
+    ...(labelR === undefined
+      ? []
+      : spokes.map((theta) => ({
+          fnType: 'text' as const,
+          graphType: 'text' as const,
+          location: spokeLabelPoint(theta, xDomain, yDomain, labelInset) ?? polarToCartesian(labelR * 1.06, theta),
+          text: formatAngle(theta, angleUnit),
+          attr: GRID_LABEL_ATTR,
+        }))),
+  ];
+}
+
 const CartesianGraph: Component<{
   spec: ChalkGraphSpec;
-  onGraphClick?: (points: Array<{ x: number; y: number }>) => void;
+  onGraphClick?: (points: GraphClickPoint[]) => void;
 }> = (props) => {
+  // Throws a SpecValidationError for a bad spec; ChalkSpecRenderer shows it.
+  const resolved = resolveGraph(props.spec);
+  const polar = resolved.grid === 'polar';
   let el!: HTMLDivElement;
   let currentWidth = 0;
   let clickCleanup: (() => void) | null = null;
-  const [pendingClicks, setPendingClicks] = createSignal<Array<{ x: number; y: number }>>([]);
+  const [pendingClicks, setPendingClicks] = createSignal<GraphClickPoint[]>([]);
   const [paramValues, setParamValues] = createSignal<Record<string, number>>(
     Object.fromEntries((props.spec.params ?? []).map((p) => [p.name, p.default])),
   );
@@ -30,10 +93,11 @@ const CartesianGraph: Component<{
     const scope = paramValues();
     w = Math.min(w, SIZE_MAX_WIDTH[props.spec.size ?? 'medium']);
     currentWidth = w;
+    let { xDomain, yDomain } = resolved;
     const h = Math.min(
       Math.max(
-        props.spec.xDomain && props.spec.yDomain
-          ? w * (props.spec.yDomain[1] - props.spec.yDomain[0]) / (props.spec.xDomain[1] - props.spec.xDomain[0])
+        xDomain && yDomain
+          ? w * (yDomain[1] - yDomain[0]) / (xDomain[1] - xDomain[0])
           : FALLBACK_HEIGHT,
         MIN_HEIGHT,
       ),
@@ -42,8 +106,14 @@ const CartesianGraph: Component<{
 
     el.style.height = `${h}px`;
 
-    const curveCount = props.spec.curves.length;
-    const pointData = (props.spec.points ?? []).flatMap((p, i) => {
+    // A polar grid needs one unit to cover the same pixels on both axes, or its rings are
+    // ellipses; the height clamp above would otherwise break that.
+    if (polar && xDomain && yDomain) {
+      ({ xDomain, yDomain } = equalScaleDomains(xDomain, yDomain, w - MARGIN_X, h - MARGIN_Y));
+    }
+
+    const curveCount = resolved.curves.length;
+    const pointData = resolved.points.flatMap((p, i) => {
       const c = color(curveCount + i);
       return [
         { fnType: 'points' as const, points: [[p.x, p.y]], graphType: 'scatter' as const, color: c },
@@ -60,16 +130,30 @@ const CartesianGraph: Component<{
       target: el,
       width: w,
       height: h,
-      grid: true,
-      xAxis: props.spec.xDomain ? { domain: props.spec.xDomain } : undefined,
-      yAxis: props.spec.yDomain ? { domain: props.spec.yDomain } : undefined,
+      grid: !polar,
+      xAxis: xDomain ? { domain: xDomain } : undefined,
+      yAxis: yDomain ? { domain: yDomain } : undefined,
       data: [
-        ...props.spec.curves.map((c, i) => ({
-          fn: c.fn,
-          graphType: 'polyline' as const,
-          color: color(i),
-          scope,
-        })),
+        ...(polar && xDomain && yDomain
+          ? polarGridData(xDomain, yDomain, resolved.angleUnit, (14 * (xDomain[1] - xDomain[0])) / (w - MARGIN_X))
+          : []),
+        ...resolved.curves.map((c, i) =>
+          c.coords === 'polar'
+            ? {
+                fnType: 'polar' as const,
+                r: c.r,
+                range: c.range,
+                graphType: 'polyline' as const,
+                color: color(i),
+                scope: { ...CONSTANTS_SCOPE, ...scope },
+              }
+            : {
+                fn: c.fn,
+                graphType: 'polyline' as const,
+                color: color(i),
+                scope: { ...CONSTANTS_SCOPE, ...scope },
+              },
+        ),
         ...pointData,
         ...clickMarkers,
       ],
@@ -90,10 +174,16 @@ const CartesianGraph: Component<{
           pt.x = e.clientX;
           pt.y = e.clientY;
           const local = pt.matrixTransform(ctm.inverse());
-          const x = round2(instance.meta.xScale!.invert(local.x));
-          const y = round2(instance.meta.yScale!.invert(local.y));
+          const rawX = instance.meta.xScale!.invert(local.x);
+          const rawY = instance.meta.yScale!.invert(local.y);
+          const x = round2(rawX);
+          const y = round2(rawY);
+          const { r, theta } = cartesianToPolar(rawX, rawY);
+          const point: GraphClickPoint = polar
+            ? { x, y, polar: { r: round2(r), theta, angleUnit: resolved.angleUnit } }
+            : { x, y };
           setPendingClicks((prev) =>
-            prev.some((p) => p.x === x && p.y === y) ? prev : [...prev, { x, y }],
+            prev.some((p) => p.x === x && p.y === y) ? prev : [...prev, point],
           );
         };
         svgEl.addEventListener('click', handler);
